@@ -27,9 +27,36 @@ No início do arquivo há um `<script>` com variáveis para você preencher:
 
 As imagens em `images/` (produto-1.jpeg a produto-4.jpeg) vieram da pasta `Novo Sistema/GestaoAtual`. Para trocar, substitua os arquivos ou altere os `src` no HTML.
 
-## Deploy
+## Deploy no Cloudflare Pages
 
-Arquivos estáticos. Publicar a pasta `site/` em Cloudflare Pages ou qualquer host (build: nenhum; diretório de saída: raiz da pasta).
+O site é estático (sem build). Duas formas de publicar:
+
+### Opção 1: Deploy pela CLI (Wrangler)
+
+1. **Primeira vez:** faça login e crie o projeto no Cloudflare:
+   ```bash
+   npx wrangler login
+   npx wrangler pages project create saldao
+   ```
+2. **Publicar:** na raiz do repositório:
+   ```bash
+   npm run deploy:site
+   ```
+   Ou diretamente: `cd api && npx wrangler pages deploy ../site --project-name=saldao`
+
+O script usa o `wrangler` instalado em `api/`. A URL ficará algo como `https://saldao.pages.dev`.
+
+### Opção 2: Deploy por Git (Cloudflare Dashboard)
+
+1. Em [Cloudflare Dashboard](https://dash.cloudflare.com) → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
+2. Conecte o repositório e configure:
+   - **Root directory:** `site`
+   - **Framework preset:** None
+   - **Build command:** (deixe vazio)
+   - **Build output directory:** `.` (ou raiz)
+3. Salve. Cada push na branch escolhida gera um deploy automático.
+
+Para outros hosts: use a pasta `site/` como raiz (build: nenhum; diretório de saída: raiz da pasta).
 
 ## Estrutura
 

@@ -4,6 +4,7 @@
   "type": "module",
   "description": "Sistema de Gestão Financeira, Projetos e Custos",
   "scripts": {
-    "setup": "node setup-local.js"
+    "setup": "node setup-local.js",
+    "deploy:site": "cd api && npx wrangler pages deploy ../site --project-name=saldao"
   }
 }
