@@ -3,11 +3,9 @@ main = "src/index.worker.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# Hyperdrive (PostgreSQL). Rodar: npm run hyperdrive:create
-# Depois colar aqui o id exibido e descomentar as 3 linhas abaixo.
-# [[hyperdrive]]
-# binding = "HYPERDRIVE"
-# id = "<COLE_O_ID_AQUI>"
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "1a04132d459f442abd695ddd84f74336"
 
 [vars]
 FIXED_AUTH = "true"

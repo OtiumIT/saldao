@@ -1,5 +1,5 @@
-// URL da API - usa variável de ambiente ou fallback para produção
-const API_URL = import.meta.env.VITE_API_URL || 'https://api.partnerfinancecontrol.com';
+// URL da API - usa variável de ambiente ou fallback para produção (Worker)
+const API_URL = import.meta.env.VITE_API_URL || 'https://gestao-api.jose-neto-fc.workers.dev';
 
 export interface ApiError {
   message: string;
