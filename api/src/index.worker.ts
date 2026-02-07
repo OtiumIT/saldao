@@ -29,7 +29,34 @@ type WorkerContext = {
   Bindings: Env;
 };
 
+const ALLOWED_ORIGIN = 'https://gestao.saldaomoveisjerusalem.com.br';
+
+function corsHeaders(origin: string): HeadersInit {
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+}
+
 const app = new Hono<WorkerContext>();
+
+// Garante CORS em toda resposta (inclusive erros)
+app.use('*', async (c, next) => {
+  await next();
+  const origin = c.env.CORS_ORIGIN || ALLOWED_ORIGIN;
+  const res = c.res;
+  res.headers.set('Access-Control-Allow-Origin', origin);
+  res.headers.set('Access-Control-Allow-Credentials', 'true');
+  if (!res.headers.has('Access-Control-Allow-Methods')) {
+    res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  }
+  if (!res.headers.has('Access-Control-Allow-Headers')) {
+    res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }
+  return c.res;
+});
 
 app.use('*', logger());
 app.use('*', secureHeaders({
@@ -40,12 +67,11 @@ app.use('*', secureHeaders({
 
 app.use('*', async (c, next) => {
   if (c.req.method === 'OPTIONS') {
+    const origin = c.env.CORS_ORIGIN || ALLOWED_ORIGIN;
     return new Response(null, {
       status: 204,
       headers: {
-        'Access-Control-Allow-Origin': c.env.CORS_ORIGIN || '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        ...corsHeaders(origin),
         'Access-Control-Max-Age': '86400',
       },
     });
@@ -60,7 +86,7 @@ app.use('*', async (c, next) => {
     })(c, next);
   } catch {
     return cors({
-      origin: '*',
+      origin: ALLOWED_ORIGIN,
       credentials: true,
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization'],
@@ -93,6 +119,14 @@ app.get('/', (c) => {
     status: 'running',
     platform: 'cloudflare-workers',
   });
+});
+
+app.onError((err, c) => {
+  const origin = c.env.CORS_ORIGIN || ALLOWED_ORIGIN;
+  const res = c.json({ error: err.message || 'Internal Server Error' }, 500);
+  const headers = new Headers(res.headers);
+  Object.entries(corsHeaders(origin)).forEach(([k, v]) => headers.set(k, v));
+  return new Response(res.body, { status: res.status, headers });
 });
 
 let poolInitialized = false;
