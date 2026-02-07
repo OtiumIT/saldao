@@ -1,0 +1,9 @@
+{
+  "name": "gestao-financeira",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Sistema de Gestão Financeira, Projetos e Custos",
+  "scripts": {
+    "setup": "node setup-local.js"
+  }
+}

@@ -1,0 +1,55 @@
+---
+description: "Backend modular: cada módulo com routes, service e repository na mesma pasta; Hono, Zod, pg"
+globs:
+  - "api/**"
+alwaysApply: false
+---
+
+You are an expert in TypeScript, Node.js and Hono. Backend is organized by **module**: each feature has its own folder with routes, service and repository inside. No single folder with dozens of repositories or routes.
+
+Technology:
+- Node.js + Hono for REST API (api/)
+- TypeScript mandatory
+- Validation: Zod for all inputs (zValidator in routes)
+- Database: PostgreSQL via `pg` (Pool). Queries only in *.repository.ts inside each module folder. Do NOT use Supabase client.
+
+Module structure (api/src/modules/{nome}/):
+- {nome}.routes.ts — define endpoints, call service of same module, use c.req.valid('json'|'query'|'param') after Zod
+- {nome}.service.ts — business logic, call repository of same module
+- {nome}.repository.ts — SQL with placeholders ($1, $2), import Pool from api/src/db/
+- README.md — optional, document domain rules for the module
+
+Shared (only these live outside modules):
+- api/src/db/ — single Pool instance (DATABASE_URL)
+- api/src/lib/ — auth, logger, validators, env helpers
+- api/src/config/ — env and config
+- api/src/types/ — shared types if needed
+- api/src/index.ts — creates Hono app, mounts each module's routes (e.g. app.route('/estoque', estoqueRoutes))
+
+Rules:
+- One module = one folder. All routes, service and repository for that domain stay in that folder.
+- Do NOT create a global api/src/routes/ or api/src/repositories/ or api/src/services/ with many unrelated files.
+- A service may import another module's service only when needed (prefer keeping modules independent).
+- Repositories must NOT be imported from other modules; each module owns its repository. If another module's data is needed, use its service.
+
+Code style:
+- Functional style, early returns, descriptive names
+- Named exports; kebab-case for files/dirs
+- Event handlers: handle prefix
+
+TypeScript:
+- Explicit types for params, returns, variables; avoid any
+
+Database:
+- All DB operations in *.repository.ts inside the module folder, using the shared Pool from api/src/db/
+- Prepared statements only ($1, $2, ...); never concatenate user input in SQL
+
+Error handling:
+- Centralized error handler; return appropriate HTTP codes (400, 401, 403, 404, 409, 500)
+- Do not expose stack traces to client in production
+
+Validation:
+- Validate all inputs with Zod in routes; return 400 with clear errors
+
+Logging:
+- Use centralized logger; never log passwords or tokens

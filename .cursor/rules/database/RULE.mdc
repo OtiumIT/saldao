@@ -1,0 +1,53 @@
+---
+description: "PostgreSQL: Pool único em api/src/db/; repositórios dentro de cada módulo"
+globs:
+  - "api/src/db/**"
+  - "api/src/modules/**/*.repository.ts"
+alwaysApply: false
+---
+
+# Database (PostgreSQL direto, estrutura modular)
+
+## 1. Conexão (única, compartilhada)
+- Use conexão PostgreSQL direta via driver `pg`. PROIBIDO usar API REST do Supabase para operações de banco.
+- Cliente: api/src/db/client.ts (ou index.ts) exporta uma única instância de Pool.
+- Connection string: DATABASE_URL em variável de ambiente (nunca no código).
+
+Exemplo:
+```ts
+// api/src/db/client.ts
+import { Pool } from 'pg';
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export default pool;
+```
+
+## 2. Repositories (dentro de cada módulo)
+- Cada módulo tem seu {nome}.repository.ts dentro de api/src/modules/{nome}/.
+- PROIBIDO pasta única api/src/repositories/ com todos os repositórios soltos.
+- O *.repository.ts importa o Pool de api/src/db/client (ou @/db/client).
+- Prepared statements obrigatórios: sempre $1, $2, etc. Nunca concatenar input do usuário em SQL.
+
+Exemplo (dentro do módulo):
+```ts
+// api/src/modules/estoque/estoque.repository.ts
+import db from '@/db/client';
+
+export async function findById(id: string) {
+  const { rows } = await db.query(
+    'SELECT * FROM produtos WHERE id = $1',
+    [id]
+  );
+  return rows[0] ?? null;
+}
+```
+
+## 3. Migrations e schema
+- Migrations versionadas (Drizzle, Prisma ou SQL em pasta dedicada).
+- Desenvolvimento local: PostgreSQL local ou Docker; DATABASE_URL apontando para ele.
+- Nunca rodar DROP/TRUNCATE automatizado em produção sem salvaguardas.
+
+## 4. Proibições
+- PROIBIDO credenciais no código; sempre variáveis de ambiente.
+- PROIBIDO criar novo Pool dentro de funções ou loops; usar sempre o singleton do client.
+- PROIBIDO queries com concatenação de string para valores; apenas placeholders.
+- PROIBIDO acesso ao banco fora de api/src/db/ e dos arquivos *.repository.ts dentro de api/src/modules/.

@@ -1,0 +1,99 @@
+---
+description: "Visão geral do projeto Saldão de Móveis Jerusalém e estrutura de regras"
+alwaysApply: true
+---
+
+# Saldão de Móveis Jerusalém
+
+Sistema de gestão para fábrica + revenda: estoque (revenda, insumos, fabricados), compras, produção (BOM), vendas, entregas e financeiro básico.
+
+**Referência de necessidades:** Pasta `Novo Sistema/` — use `NECESSIDADES_SISTEMA.md` como fonte da verdade para escopo e prioridade de módulos.
+
+## Estrutura do Projeto (modular)
+
+Cada funcionalidade é um **módulo** com sua própria pasta, na API e no frontend. Nada de pasta única com dezenas de routes/repositories soltos.
+
+**Importante:** "Módulo" aqui é só **organização de código** (pasta por domínio). Não existe tabela de módulos no banco, não há "liga e desliga" de funcionalidades, planos nem feature toggles — tudo que estiver no código está sempre disponível.
+
+```
+frontend/
+  src/
+    modules/                    # Um módulo por pasta (cada tela/domínio)
+      auth/
+        pages/                  # Telas do módulo
+        components/            # Componentes só desse módulo
+        services/               # Chamadas à API desse módulo
+        hooks/                  # (opcional) Hooks do módulo
+      estoque/
+        pages/
+        components/
+        services/
+      vendas/
+        pages/
+        components/
+        services/
+    shared/                     # Código compartilhado (layout, contexto, etc.)
+    components/ui/              # Componentes UI reutilizáveis (botões, inputs)
+    lib/                        # api-client base, auth, config
+
+api/
+  src/
+    modules/                    # Um módulo por pasta (espelha o domínio)
+      auth/
+        auth.routes.ts
+        auth.service.ts
+        auth.repository.ts
+        README.md               # (opcional) Regras de negócio do módulo
+      estoque/
+        estoque.routes.ts
+        estoque.service.ts
+        estoque.repository.ts
+      vendas/
+        vendas.routes.ts
+        vendas.service.ts
+        vendas.repository.ts
+    db/                         # Cliente PostgreSQL (Pool) — único, compartilhado
+    lib/                        # Helpers globais (auth, logger, validators)
+    config/
+    types/                      # Tipos compartilhados (se necessário)
+    index.ts                    # Monta e exporta o app (registra rotas dos módulos)
+```
+
+## Banco de Dados
+
+- **PostgreSQL direto** via driver `pg` (Pool). Não usar API REST do Supabase para operações de banco.
+- Acesso ao banco **somente** pela API, dentro dos `*.repository.ts` de cada módulo e em `db/`.
+- Projeto **single-tenant** (uma base, uma empresa).
+
+## Regras (Cursor)
+
+### Sempre aplicadas (`alwaysApply: true`)
+1. **arquitetura-core** — Separação frontend/API; banco só pela API; PostgreSQL direto (sem Supabase client).
+2. **typescript** — Tipagem obrigatória, evitar `any`.
+3. **seguranca** — Autenticação, validação, proteção contra ataques.
+
+### Por contexto (`globs`)
+4. **frontend-react** — `frontend/**` — React, Vite, Tailwind, comunicação só via API.
+5. **backend-api** — `api/**` — Hono, Zod, serviços e repositórios com PostgreSQL.
+6. **database** — `api/src/db/**`, `api/src/modules/**/*.repository.ts` — Pool, prepared statements, migrations.
+7. **api-design** — `api/**` — Padrões REST, códigos HTTP, formato de resposta.
+
+### Aplicadas quando relevante
+8. **codigo-padroes** — Convenções de código, Git, documentação.
+9. **metodologia-trabalho** — Planejamento antes de implementar.
+10. **module-documentation** — README.md por módulo de domínio com regras de negócio.
+
+## Tecnologias Principais
+
+- **Frontend:** React 18, Vite, TypeScript, TailwindCSS, React Router.
+- **Backend:** Node.js, Hono, TypeScript, Zod.
+- **Banco:** PostgreSQL (driver `pg`, conexão direta).
+- **Deploy frontend:** Cloudflare Pages (estático).
+
+## Módulos de Negócio (Novo Sistema)
+
+Ordem sugerida: Estoque → Compras → Avisos de compra → Produção (BOM) → Vendas → Financeiro → Roteirização (2 veículos).
+
+---
+
+A pasta `.cursorb` era do projeto multitenancy usado como referência (PostgreSQL direto, etc.). As regras foram consolidadas aqui; você pode removê-la na limpeza do projeto copiado.

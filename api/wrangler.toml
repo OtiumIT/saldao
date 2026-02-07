@@ -1,0 +1,37 @@
+name = "dvd-api"
+main = "src/index.worker.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Variáveis de ambiente (definir via Cloudflare Dashboard ou wrangler secret)
+# As variáveis serão acessadas via env no Worker
+# [vars]
+# SUPABASE_URL = ""
+# SUPABASE_SERVICE_ROLE_KEY = ""
+# OPENAI_API_KEY = ""
+# GMAIL_USER = ""
+# GMAIL_APP_PASSWORD = ""
+# CONTACT_EMAIL = ""
+# CORS_ORIGIN = ""
+# FRONTEND_URL = ""
+
+# KV Namespaces (para rate limiting)
+# Criar via: wrangler kv:namespace create "RATE_LIMIT"
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT"
+# id = "your-kv-namespace-id"
+# preview_id = "your-preview-kv-namespace-id"
+
+# Nota: O build é feito antes do deploy, não precisa de [build] aqui
+# Limites de CPU não são suportados no plano gratuito
+
+# Configurações de deploy
+[env.production]
+routes = [
+  { pattern = "api.partnerfinancecontrol.com/*", zone_name = "partnerfinancecontrol.com" }
+]
+
+[env.staging]
+routes = [
+  { pattern = "api-staging.partnerfinancecontrol.com/*", zone_name = "partnerfinancecontrol.com" }
+]

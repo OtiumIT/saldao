@@ -1,0 +1,20 @@
+{
+  "name": "data-import",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Scripts de análise e importação de dados do Excel",
+  "scripts": {
+    "analyze": "node analyze-excel-detailed.js",
+    "import": "node import-excel-complete.js",
+    "import-old": "node import-excel.js",
+    "generate-sql": "node generate-sql-inserts.js",
+    "dump-gestao": "node dump-gestao-atual.js",
+    "import-gestao": "node import-gestao-atual.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.47.10",
+    "dotenv": "^16.4.7",
+    "pg": "^8.13.0",
+    "xlsx": "^0.18.5"
+  }
+}

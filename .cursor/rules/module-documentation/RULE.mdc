@@ -1,0 +1,22 @@
+---
+description: "Documentação de módulos: README.md com regras de negócio nos domínios da API"
+globs:
+  - "api/src/modules/**"
+alwaysApply: false
+---
+
+# Documentação de Módulos (API)
+
+Cada módulo em api/src/modules/{nome}/ pode ter um README.md na **raiz da pasta do módulo** (junto de {nome}.routes.ts, {nome}.service.ts, {nome}.repository.ts) para documentar regras de negócio e fluxos. Isso ajuda a IA e desenvolvedores a entenderem o comportamento sem ler todo o código.
+
+Estrutura sugerida do README.md:
+- **Descrição:** propósito e responsabilidades do módulo
+- **Regras de negócio:** validações, limites, comportamentos críticos (ex.: estoque mínimo, BOM, baixa em vendas)
+- **Dependências:** outros módulos ou tabelas usados
+- **Endpoints e fluxos:** lista resumida de rotas e passos importantes
+
+Exemplo (módulo estoque):
+- Regras: saldo atualizado por venda (baixa), compra (entrada), produção (baixa insumos + entrada fabricado), ajuste manual
+- Tipos de produto: Revenda, Insumos, Fabricados
+
+Ao criar ou alterar um módulo com lógica relevante (ex.: estoque, produção, vendas), manter ou criar o README.md do módulo atualizado.

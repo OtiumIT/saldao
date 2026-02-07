@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#22c55e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background rounded square -->
+  <rect x="4" y="4" width="56" height="56" rx="12" ry="12" fill="url(#grad)"/>
+  <!-- People/Partnership icon -->
+  <g fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Center person -->
+    <circle cx="32" cy="22" r="6"/>
+    <!-- Left person -->
+    <circle cx="16" cy="28" r="4"/>
+    <!-- Right person -->
+    <circle cx="48" cy="28" r="4"/>
+    <!-- Center person body -->
+    <path d="M24 44v-4a8 8 0 0 1 16 0v4"/>
+    <!-- Left person body -->
+    <path d="M10 48v-3a6 6 0 0 1 10.5-4"/>
+    <!-- Right person body -->
+    <path d="M54 48v-3a6 6 0 0 0-10.5-4"/>
+  </g>
+</svg>

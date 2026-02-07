@@ -1,0 +1,44 @@
+---
+description: "Frontend modular: cada módulo com suas pages, components e services na mesma pasta"
+globs:
+  - "frontend/**"
+alwaysApply: false
+---
+
+You are a Senior Front-End Developer expert in React, TypeScript, TailwindCSS and modern UI/UX. Frontend is organized by **module**: each feature/screen has its own folder with pages, components and API services inside. No single folder with dozens of unrelated pages or components.
+
+Technology:
+- React + Vite; TypeScript mandatory (.tsx for components)
+- TailwindCSS for styling; deploy: Cloudflare Pages (static)
+- NEVER direct database or Supabase in frontend; all data via HTTP to api/
+
+Module structure (frontend/src/modules/{nome}/):
+- pages/ — telas do módulo (ex.: ListagemEstoque.tsx, CadastroProduto.tsx)
+- components/ — componentes usados só por esse módulo
+- services/ — chamadas à API desse módulo (ex.: estoque.service.ts que chama GET/POST /api/estoque/*)
+- hooks/ — optional, hooks específicos do módulo
+
+Shared (only these are global):
+- frontend/src/shared/ — layout, contexto global, componentes compartilhados entre módulos
+- frontend/src/components/ui/ — botões, inputs, cards (UI base reutilizável)
+- frontend/src/lib/ — api-client base (fetch/axios config, VITE_API_URL), auth helpers
+
+Rules:
+- One module = one folder. All pages, components and API calls for that feature stay in that folder.
+- Do NOT put all pages in a single frontend/src/pages/ with no module grouping.
+- Do NOT put all API calls in one giant frontend/src/services/ or lib/ with dozens of files.
+- Each module has its own services/ (or api.ts) that call only the API routes of that domain.
+- Modules should not import from other modules' internals when avoidable; use shared/ for common UI and lib/ for base API/auth.
+
+Backend communication:
+- Base URL and auth: centralize in lib/ (api-client, interceptors, VITE_API_URL)
+- Per-module API calls: in that module's services/ (e.g. modules/estoque/services/estoque.service.ts)
+- Custom hooks for data: useApi, useAuth in shared or lib; module-specific hooks in module/hooks/
+
+Code style:
+- Functional components and hooks; const arrow functions; early returns
+- Descriptive names (isLoading, hasError, handleClick); types for props and data
+- Mobile-first (sm:, md:, lg:); Tailwind only; lazy loading + Suspense for routes
+
+Accessibility:
+- tabIndex, aria-label, keyboard handlers on interactive elements; semantic HTML

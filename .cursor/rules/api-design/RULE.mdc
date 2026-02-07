@@ -1,0 +1,51 @@
+---
+description: "REST API design patterns: HTTP methods, status codes, response format, CORS, versioning"
+globs:
+  - "api/**"
+alwaysApply: false
+---
+
+RESTful APIs:
+- Use appropriate HTTP methods (GET, POST, PUT, PATCH, DELETE)
+- GET: Read-only, no side effects, can be cached
+- POST: Create resources, operations that cause side effects
+- PUT: Complete resource update (idempotent)
+- PATCH: Partial resource update (idempotent)
+- DELETE: Remove resources (idempotent)
+
+HTTP responses:
+- Return correct HTTP status codes:
+  - 200 OK: Success on GET, PUT, PATCH, DELETE
+  - 201 Created: Resource created successfully (POST)
+  - 204 No Content: Success without response body
+  - 400 Bad Request: Invalid data (validation failed)
+  - 401 Unauthorized: Not authenticated (invalid/expired token)
+  - 403 Forbidden: Authenticated but without permission
+  - 404 Not Found: Resource not found
+  - 409 Conflict: Conflict (ex: email already exists)
+  - 429 Too Many Requests: Rate limit exceeded
+  - 500 Internal Server Error: Server error (do not expose details)
+
+Response format:
+- Consistent JSON responses:
+  - Success: { data: ..., meta?: {...} }
+  - Error: { error: string, code?: string, details?: {...} }
+- Always return correct Content-Type: application/json
+- Pagination: { data: [...], meta: { page, limit, total, totalPages } }
+
+Versioning:
+- Version API when necessary: /api/v1/..., /api/v2/...
+- Keep old versions working during migration period
+- Document breaking changes between versions
+
+CORS (Cross-Origin Resource Sharing):
+- Configure CORS adequately: only trusted origins
+- Do not use Access-Control-Allow-Origin: * in production
+- Explicitly specify allowed methods and headers
+- Preflight requests (OPTIONS) must be handled correctly
+
+Documentation:
+- Document important endpoints (OpenAPI/Swagger when possible)
+- Include request/response examples
+- Document possible error codes
+- Keep documentation updated

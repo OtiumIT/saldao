@@ -1,0 +1,37 @@
+name = "gestao-dfy-api"
+main = "src/index.worker.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Variáveis de ambiente (definir via Cloudflare Dashboard ou wrangler secret)
+# NÃO coloque valores sensíveis aqui - use wrangler secret put
+# [vars]
+# CORS_ORIGIN = "https://seu-frontend.pages.dev"
+# FRONTEND_URL = "https://seu-frontend.pages.dev"
+
+# KV Namespaces (para rate limiting - opcional)
+# Criar via: wrangler kv:namespace create "RATE_LIMIT"
+# Depois adicionar os IDs aqui:
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT"
+# id = "seu-kv-namespace-id-producao"
+# preview_id = "seu-kv-namespace-id-preview"
+
+# Limites de recursos
+[limits]
+cpu_ms = 50
+
+# Configurações de build
+[build]
+command = "npm run build"
+
+# Configurações de deploy por ambiente
+[env.production]
+routes = [
+  { pattern = "api.yourdomain.com/*", zone_name = "yourdomain.com" }
+]
+
+[env.staging]
+routes = [
+  { pattern = "api-staging.yourdomain.com/*", zone_name = "yourdomain.com" }
+]

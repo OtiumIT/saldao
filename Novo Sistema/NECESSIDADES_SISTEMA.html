@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Necessidades do Sistema – Saldão de Móveis Jerusalém</title>
+  <style>
+    :root {
+      --bg: #f8f9fa;
+      --card: #fff;
+      --text: #1a1a1a;
+      --muted: #5a5a5a;
+      --accent: #0d6efd;
+      --border: #dee2e6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+      margin: 0;
+      padding: 0;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: 1.5rem; }
+    header {
+      background: var(--card);
+      border-bottom: 2px solid var(--border);
+      padding: 1.5rem 0;
+      margin-bottom: 2rem;
+    }
+    header h1 { margin: 0; font-size: 1.5rem; color: var(--text); }
+    header p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.95rem; }
+    h2 {
+      font-size: 1.25rem;
+      margin: 2rem 0 0.75rem;
+      padding-bottom: 0.25rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+    h2:first-of-type { margin-top: 0; }
+    h3 { font-size: 1.05rem; margin: 1.25rem 0 0.5rem; color: var(--text); }
+    section, .card {
+      background: var(--card);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    ul { margin: 0.5rem 0; padding-left: 1.5rem; }
+    li { margin: 0.35rem 0; }
+    .idea { font-style: italic; color: var(--muted); margin-bottom: 0.75rem; }
+    .diferencial {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      background: #e8f4fd;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+    .diferencial strong { color: var(--accent); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      margin: 0.75rem 0;
+    }
+    th, td { text-align: left; padding: 0.5rem 0.75rem; border: 1px solid var(--border); }
+    th { background: var(--bg); font-weight: 600; }
+    .diagram {
+      background: #f0f2f5;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      font-family: ui-monospace, monospace;
+      font-size: 0.8rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .termo { background: #f0f7ff; padding: 0.2em 0.4em; border-radius: 4px; }
+    .note { font-size: 0.9rem; color: var(--muted); margin-top: 1rem; }
+    footer { margin-top: 2rem; padding: 1rem 0; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); }
+    @media print {
+      body { background: #fff; }
+      .container { max-width: none; }
+      section, .card { box-shadow: none; border: 1px solid #ddd; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>Necessidades do Sistema – Saldão de Móveis Jerusalém</h1>
+      <p>Apenas necessidade sistêmica. Decisões tecnológicas e stacks ficam para outro momento.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section>
+      <h2>Objetivo e contexto</h2>
+      <p><strong>Objetivo:</strong> Sistema próprio que atenda bem a cliente, em substituição a ERPs genéricos que não se encaixam.</p>
+      <p><strong>Contexto:</strong> Fábrica + revenda — parte dos móveis é <strong>fabricada</strong> (usa insumos), parte é <strong>revenda</strong> (comprada pronta).</p>
+    </section>
+
+    <section>
+      <h2>Requisitos da cliente</h2>
+      <ol>
+        <li>Gestão de estoque (revenda + insumos + fabricados)</li>
+        <li>Gestão de vendas (com atualização do estoque)</li>
+        <li>Avisos de necessidade de compras</li>
+        <li>Lançamento de compras (revenda + insumos)</li>
+        <li><strong>Produção:</strong> cadastro de insumos por móvel, entrada de insumos, validação semanal, construção e entrada do fabricado no estoque</li>
+        <li>Roteirização de entrega (2 veículos)</li>
+        <li>Financeiro básico</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Termos usados</h2>
+      <p><strong class="termo">BOM</strong> (Bill of Materials) = <strong>lista de materiais</strong> ou <strong>receita de produção</strong>. É a “receita” do móvel: quanto de cada insumo entra em <strong>1 unidade</strong> do produto fabricado. Ex.: 1 guarda-roupa = 2,5 m² chapa + 20 puxadores + 4 corrediças + 0,5 L cola. Com o BOM o sistema sabe o que consumir ao registrar uma produção e consegue calcular “quantas unidades dá para fazer” com o estoque atual de insumos.</p>
+    </section>
+
+    <section>
+      <h2>Visão geral</h2>
+      <p>Um único sistema que cubra <strong>revenda + fábrica</strong>: estoque (três tipos de item), compras (revenda e insumos), <strong>produção</strong> (insumos → móvel fabricado → estoque), vendas, entregas e financeiro.</p>
+      <div class="diagram">
+ESTOQUE (Revenda | Insumos | Fabricados) → COMPRAS (revenda+insumos) → PRODUÇÃO (insumos→móvel) → VENDAS → ENTREGAS (2 veíc.) → FINANCEIRO
+                                    ↑
+                    AVISOS DE COMPRA (mín. insumos + mín. revenda)
+      </div>
+    </section>
+
+    <section>
+      <h2>1. Gestão de estoque</h2>
+      <ul>
+        <li><strong>Cadastro de produtos:</strong> Código, descrição, unidade (UN, M2, etc.), tipo: <strong>Revenda</strong>, <strong>Insumos</strong> (matéria prima) ou <strong>Fabricados</strong> (com receita/BOM no módulo Produção). Preço de compra, preço de venda (revenda/fabricados), estoque mínimo (e máximo opcional), fornecedor principal.</li>
+        <li><strong>Saldo atual:</strong> Atualizado por: venda (baixa), compra (entrada em revenda ou insumos), produção (baixa insumos + entrada fabricado), ajuste manual.</li>
+        <li><strong>Movimentações:</strong> Data, tipo (entrada/saída/ajuste/produção), produto, quantidade, origem (venda, compra, ordem produção, ajuste).</li>
+        <li><strong>Relatório:</strong> Listagem com saldo, estoque mínimo e indicador “abaixo do mínimo” (base para avisos).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>2. Gestão de vendas (com atualização do estoque)</h2>
+      <ul>
+        <li><strong>Cadastro do pedido:</strong> Cliente (nome, fone, endereço de entrega), data, itens (produto + quantidade + preço). Status: rascunho → confirmado → entregue (ou cancelado).</li>
+        <li><strong>Regra:</strong> Ao confirmar o pedido, baixa automática no estoque. Se não houver saldo suficiente, o sistema pode avisar ou impedir confirmar (conforme regra de negócio).</li>
+        <li><strong>Saída:</strong> Lista de pedidos (filtro por data, status, cliente). Impressão/PDF do pedido para uso interno e entrega.</li>
+        <li><strong>Pré-preenchimento por foto:</strong> Ela tira uma foto do papel onde anotou a venda. O sistema lê a imagem, extrai cliente, data, itens, quantidades e preços e <strong>pré-preenche toda a tela de cadastro de venda</strong>. Ela só revisa e confirma (ou corrige o que saiu errado).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>3. Avisos de necessidade de compras</h2>
+      <ul>
+        <li><strong>Regra:</strong> Para cada produto (revenda ou insumos) com saldo ≤ estoque mínimo, gerar um aviso. Insumos em falta impactam a produção (validação semanal no módulo Produção).</li>
+        <li><strong>Tela “Avisos de compra”:</strong> Lista: produto, saldo atual, estoque mínimo, quantidade sugerida. Botão “Gerar pedido de compra” (leva itens para o módulo de compras).</li>
+        <li><strong>Opcional:</strong> Aviso por produto mais vendido ou relatório semanal (e-mail/WhatsApp).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>4. Lançamento de compras</h2>
+      <ul>
+        <li><strong>Pedido de compra:</strong> Fornecedor, data, itens (produto + quantidade + preço unitário), total. Status: em aberto → recebido (parcial/total).</li>
+        <li><strong>Recebimento:</strong> Ao marcar como “recebido”, entrada no estoque automática.</li>
+        <li><strong>Origem:</strong> Itens podem vir da tela de Avisos de compra (pré-preenchido) ou ser digitados manualmente.</li>
+        <li><strong>Saída:</strong> Lista de pedidos (por fornecedor, data, status). Histórico de entradas por produto.</li>
+        <li><strong>Pré-preenchimento por foto:</strong> Foto do pedido de compra em papel. O sistema lê a imagem, extrai fornecedor, data, itens, quantidades e preços e <strong>preenche o pedido de compra</strong>. Ela revisa, ajusta se precisar e salva.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>5. Produção (fábrica): insumos, receita, validação e construção</h2>
+      <h3>5.1 Cadastro de insumos (matéria prima)</h3>
+      <p>Produtos tipo Insumos no cadastro geral. Entrada via Compras (pedido → recebimento → estoque). Estoque mínimo por insumo para avisos e validação.</p>
+
+      <h3>5.2 Cadastro de cada móvel fabricado (receita / BOM)</h3>
+      <p>Produto tipo Fabricado: código, descrição, unidade, preço de venda. <strong>Receita de produção (BOM):</strong> por unidade do móvel, quanto de cada insumo é usado (ex.: 1 Guarda-roupa = 2,5 m² chapa + 20 puxadores + 4 corrediças + 0,5 L cola). Tela do fabricado com lista Insumo + quantidade por unidade.</p>
+
+      <h3>5.3 Validação semanal dos insumos</h3>
+      <p>Para cada móvel: estoque_atual ÷ quantidade_por_unidade por insumo = quantas unidades esse insumo sustenta. O <strong>máximo que dá para construir</strong> = menor valor (gargalo). Tela “Validação de insumos”: lista dos fabricados com “quantidade que dá para construir agora”, “insumo gargalo”, e opcional “quanto falta para mais X unidades”. Uso ao menos semanal.</p>
+
+      <h3>5.4 Construção (ordem de produção) e entrada no estoque</h3>
+      <p><strong>Lançar produção:</strong> móvel fabricado + quantidade. Sistema calcula consumo (quantidade × BOM), dá baixa nos insumos e entrada no estoque do fabricado. Opcional: validar se há insumos suficientes antes de confirmar. Movimentações com origem “Ordem de produção nº X” para rastreio.</p>
+      <p><strong>Fluxo:</strong> Entrada insumos (Compras) → Cadastro móvel + BOM → Validação semanal → Construção (baixa insumos + entrada fabricado) → Vendas consomem estoque (revenda + fabricados).</p>
+    </section>
+
+    <section>
+      <h2>6. Roteirização de entrega (2 veículos)</h2>
+      <ul>
+        <li><strong>Entregas do dia:</strong> Lista de pedidos confirmados / a entregar, com endereço. Filtrar por data e marcar “entregue”.</li>
+        <li><strong>Dois veículos:</strong> Cadastro Veículo 1 e Veículo 2 (nome, placa opcional). Dividir entregas entre os dois (arrastar ou por região).</li>
+        <li><strong>Rota:</strong> Ordem de parada sugerida por proximidade. Lista ordenada + mapa com a sequência.</li>
+        <li><strong>Uso em campo:</strong> Tela no celular para motorista ver lista e marcar “entregue” (e canhoto/assinatura se quiser).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>7. Financeiro básico</h2>
+      <ul>
+        <li><strong>Contas a pagar:</strong> Vinculadas a compras (parcelas) ou lançamentos manuais. Descrição, valor, vencimento, status (pendente/pago), forma de pagamento.</li>
+        <li><strong>Contas a receber:</strong> Vinculadas a vendas ou manuais. Mesmos campos.</li>
+        <li><strong>Resumo:</strong> Total a pagar e a receber (hoje / semana / mês). Fluxo do mês (entradas − saídas) de forma simples.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Pré-preenchimento por foto</h2>
+      <p class="idea">Reduzir digitação quando a cliente já anotou venda ou pedido de compra em papel: ela tira uma foto, o sistema interpreta e pré-preenche o formulário; ela só revisa e salva.</p>
+      <h3>Fluxo geral</h3>
+      <ol>
+        <li>Na tela de cadastro de venda ou pedido de compra, botão “Preencher por foto” (ou ícone de câmera).</li>
+        <li>Ela tira a foto no celular ou envia uma imagem do papel (anotações, recibo, pedido escrito).</li>
+        <li>O sistema lê e interpreta a estrutura (cliente, itens, quantidades, preços).</li>
+        <li>O formulário é preenchido automaticamente.</li>
+        <li>Ela revisa os campos, corrige o que saiu errado e salva.</li>
+      </ol>
+      <h3>Onde se aplica</h3>
+      <ul>
+        <li><strong>Venda:</strong> foto do papel da venda → pré-preenche cliente, data, itens, totais.</li>
+        <li><strong>Pedido de compra:</strong> foto do pedido em papel → pré-preenche fornecedor, data, itens, totais.</li>
+      </ul>
+      <p class="note"><strong>Importante:</strong> O pré-preenchimento é sugestão. A usuária sempre revisa e pode editar qualquer campo antes de salvar.</p>
+    </section>
+
+    <section>
+      <h2>Prioridade de entrega (ordem sugerida)</h2>
+      <table>
+        <thead>
+          <tr><th>Fase</th><th>Módulo</th><th>Motivo</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Estoque</td><td>Base: cadastro em 3 tipos (Revenda, Insumos, Fabricados) e saldo.</td></tr>
+          <tr><td>2</td><td>Compras</td><td>Entrada de estoque (revenda e insumos) e base para avisos.</td></tr>
+          <tr><td>3</td><td>Avisos de compra</td><td>Depende de estoque mínimo (revenda e insumos).</td></tr>
+          <tr><td>4</td><td><strong>Produção</strong></td><td>BOM por fabricado, validação semanal, ordem de produção.</td></tr>
+          <tr><td>5</td><td>Vendas + baixa estoque</td><td>Usa estoque (revenda + fabricados) e gera receita.</td></tr>
+          <tr><td>6</td><td>Financeiro básico</td><td>Aproveita vendas e compras para a pagar/receber.</td></tr>
+          <tr><td>7</td><td>Roteirização (2 veículos)</td><td>Usa lista de pedidos a entregar.</td></tr>
+        </tbody>
+      </table>
+      <p>A cliente pode usar estoque (3 tipos), compras e avisos; em seguida produção; depois vendas, financeiro e rotas.</p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>Saldão de Móveis Jerusalém — Necessidades do sistema (apenas necessidade sistêmica). Decisões tecnológicas e stacks ficam para outro momento.</p>
+    </div>
+  </footer>
+</body>
+</html>

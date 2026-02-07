@@ -1,0 +1,59 @@
+---
+description: "Arquitetura modular: cada domínio com sua pasta na API e no frontend; PostgreSQL direto"
+alwaysApply: true
+---
+
+You are an expert in software architecture. You enforce modular structure: one folder per feature/domain, both in API and frontend. No single giant folder full of routes, services or repositories.
+
+Project structure:
+- frontend/: React + Vite. Organize by module under frontend/src/modules/{nome}/.
+- api/: REST API Node.js + Hono. Organize by module under api/src/modules/{nome}/.
+- Database: PostgreSQL via driver `pg` (conexão direta). Não usar API REST do Supabase.
+
+Modular structure (mandatory): "Module" = code organization only (one folder per domain). No modules table in DB, no feature toggles, no enable/disable — everything in code is always available.
+
+API — api/src/modules/{nome}/ (ex.: estoque, vendas, auth, compras):
+- {nome}.routes.ts — endpoints desse módulo
+- {nome}.service.ts — lógica de negócio do módulo
+- {nome}.repository.ts — queries PostgreSQL desse módulo (usa Pool de api/src/db/)
+- README.md — opcional, regras de negócio do módulo
+Shared API (only these are global): api/src/db/ (Pool), api/src/lib/, api/src/config/, api/src/types/
+- PROIBIDO pasta única api/src/routes/ com todas as rotas soltas
+- PROIBIDO pasta única api/src/repositories/ com todos os repos soltos
+- PROIBIDO pasta única api/src/services/ com todos os services soltos
+- Cada módulo contém suas rotas, seu service e seu repository dentro da mesma pasta
+
+Frontend — frontend/src/modules/{nome}/ (ex.: auth, estoque, vendas):
+- pages/ — telas do módulo
+- components/ — componentes específicos do módulo
+- services/ — chamadas à API desse módulo (ou arquivo api.ts / module.service.ts)
+- hooks/ — opcional, hooks do módulo
+Shared frontend: frontend/src/shared/, frontend/src/components/ui/, frontend/src/lib/ (api-client base, auth)
+- PROIBIDO jogar todas as páginas em uma pasta pages/ única sem organização por módulo
+- Cada módulo agrupa suas pages, components e services na mesma pasta
+
+Import and access rules:
+- NEVER import database libraries (pg, Supabase client) in frontend
+- Frontend communicates with backend ONLY via HTTP/HTTPS
+- NEVER import from api/** into frontend; NEVER import from frontend/** into api
+- Dentro da API: um módulo pode importar de api/src/db/, api/src/lib/, api/src/config/, api/src/types/ e de outros módulos apenas quando necessário (evitar acoplamento)
+
+Dependency direction (inside each API module):
+- routes → service → repository → db (Pool)
+- Repository importa Pool de api/src/db/client (ou @/db/client)
+
+Database access:
+- API is the ONLY layer that accesses the database
+- All DB access via Pool (api/src/db/) and via *.repository.ts files inside api/src/modules/{nome}/
+- Use prepared statements ($1, $2); do NOT use Supabase client for data operations
+
+Forbidden patterns:
+- api/src/routes/ com dezenas de arquivos .routes.ts soltos → REJECT (use api/src/modules/{nome}/{nome}.routes.ts)
+- api/src/repositories/ com dezenas de .repository.ts soltos → REJECT (cada repository fica dentro do seu módulo)
+- frontend/src/pages/ com todas as telas soltas sem módulos → REJECT (use frontend/src/modules/{nome}/pages/)
+- Business logic in routes → REJECT (move to service of same module)
+- SQL in services → REJECT (use repository of same module)
+
+Naming (per module):
+- {nome}.routes.ts, {nome}.service.ts, {nome}.repository.ts (nome do módulo em kebab-case ou camelCase consistente)
+- DB client: api/src/db/client.ts (single Pool export)

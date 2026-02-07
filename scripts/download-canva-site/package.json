@@ -1,0 +1,12 @@
+{
+  "name": "download-canva-site",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Baixa HTML e imagens do site atual (Canva) do Saldão de Móveis Jerusalém",
+  "scripts": {
+    "download": "node download-canva-site.js"
+  },
+  "dependencies": {
+    "puppeteer-core": "^24.0.0"
+  }
+}

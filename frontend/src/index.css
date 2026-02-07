@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+/* Tailwind v4: cores da marca para gerar utilitários (bg-brand-*, text-brand-*, etc.) */
+@theme {
+  --color-brand-black: #121212;
+  --color-brand-black-soft: #1a1a1a;
+  --color-brand-gray: #2C2C2C;
+  --color-brand-gold: #F2C94C;
+  --color-brand-gold-bright: #FFD700;
+  --color-brand-gold-dark: #D4A83A;
+}
+
+html {
+  /* Evita zoom indesejado em inputs no iOS */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Mobile: área segura para notch/home indicator */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Feedback tátil em botões/links no mobile (dourado da marca) */
+button, a, [role="button"] {
+  -webkit-tap-highlight-color: rgba(242, 201, 76, 0.3);
+}
+
+/* Saldão de Móveis Jerusalém – Identidade visual (variáveis para uso em style ou JS) */
+:root {
+  --brand-black: #121212;
+  --brand-black-soft: #1a1a1a;
+  --brand-gray: #2C2C2C;
+  --brand-gold: #F2C94C;
+  --brand-gold-bright: #FFD700;
+  --brand-gold-dark: #D4A83A;
+}
+
+/* Modal Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
