@@ -97,11 +97,23 @@ O Hyperdrive em local não existe; use `wrangler dev` com `.dev.vars` e, se nece
 
 ### 2.3. Deploy do Worker
 
+**Local (a partir da raiz do repo):**
+```bash
+npm run deploy:api
+```
+
+**Ou a partir da pasta api:**
 ```bash
 cd api
 npm install
 npx wrangler deploy
 ```
+
+**CI / Cloudflare (build a partir da raiz):**  
+Se o comando de deploy rodar na raiz (ex.: Workers deploy no Dashboard), use um comando que instale as dependências em `api/` antes do deploy, senão o Wrangler não encontra `pg`, `hono`, `zod`, etc.:
+
+- **Comando de deploy:** `npm run deploy:api`  
+- **Ou:** `cd api && npm install && npx wrangler deploy`
 
 A API ficará em `https://gestao-api.<seu-subdominio>.workers.dev`. Use essa URL em `VITE_API_URL` no frontend.
 

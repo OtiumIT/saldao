@@ -3,21 +3,25 @@ main = "src/index.worker.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# Hyperdrive: criar com wrangler hyperdrive create gestao-db --connection-string="postgresql://..."
-# Depois colocar o ID abaixo e descomentar.
+# Hyperdrive (PostgreSQL). Rodar: npm run hyperdrive:create
+# Depois colar aqui o id exibido e descomentar as 3 linhas abaixo.
 # [[hyperdrive]]
 # binding = "HYPERDRIVE"
-# id = "<HYPERDRIVE_CONFIG_ID>"
+# id = "<COLE_O_ID_AQUI>"
 
-# Variáveis de ambiente (produção: Cloudflare Dashboard ou wrangler secret)
-# [vars]
-# CORS_ORIGIN = "https://gestao.pages.dev"
-# FRONTEND_URL = "https://gestao.pages.dev"
+[vars]
+FIXED_AUTH = "true"
+FIXED_AUTH_EMAIL = "admin@saldao.local"
+CORS_ORIGIN = "https://gestao.saldaomoveisjerusalem.com.br"
+FRONTEND_URL = "https://gestao.saldaomoveisjerusalem.com.br"
+SEND_CONFIRMATION_EMAIL = "false"
+GMAIL_USER = ""
+CONTACT_EMAIL = ""
 
-# Secrets: wrangler secret put JWT_SECRET, etc.
+# Secrets (definir via CLI: wrangler secret put <NOME>)
+# JWT_SECRET, FIXED_AUTH_PASSWORD, GMAIL_APP_PASSWORD, OPENAI_API_KEY
+# Opcionais (se usar Supabase auth): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
-# Rotas customizadas (opcional; sem isso fica em *.workers.dev)
-# [env.production]
-# routes = [
-#   { pattern = "api.seudominio.com/*", zone_name = "seudominio.com" }
-# ]
+[env.production]
+vars = { CORS_ORIGIN = "https://gestao.saldaomoveisjerusalem.com.br", FRONTEND_URL = "https://gestao.saldaomoveisjerusalem.com.br" }
+# routes = [{ pattern = "api.seudominio.com/*", zone_name = "seudominio.com" }]
