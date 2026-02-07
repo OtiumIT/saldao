@@ -3,7 +3,7 @@
   "outputDirectory": "dist",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
-  "deployCommand": "npx wrangler pages deploy dist --project-name=dvd --commit-dirty=true",
   "framework": "vite",
-  "nodeVersion": "20"
+  "nodeVersion": "20",
+  "projectName": "gestao"
 }

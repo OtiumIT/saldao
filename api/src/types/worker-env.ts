@@ -33,4 +33,11 @@ export interface Env {
   
   // Email Workers (opcional, se usar Cloudflare Email Workers)
   EMAIL_WORKER?: string;
+
+  // Hyperdrive (PostgreSQL no Workers) — binding com .connectionString
+  HYPERDRIVE?: HyperdriveBinding;
+}
+
+export interface HyperdriveBinding {
+  connectionString: string;
 }

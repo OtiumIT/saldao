@@ -1,37 +1,23 @@
-name = "dvd-api"
+name = "gestao-api"
 main = "src/index.worker.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# Variáveis de ambiente (definir via Cloudflare Dashboard ou wrangler secret)
-# As variáveis serão acessadas via env no Worker
+# Hyperdrive: criar com wrangler hyperdrive create gestao-db --connection-string="postgresql://..."
+# Depois colocar o ID abaixo e descomentar.
+# [[hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "<HYPERDRIVE_CONFIG_ID>"
+
+# Variáveis de ambiente (produção: Cloudflare Dashboard ou wrangler secret)
 # [vars]
-# SUPABASE_URL = ""
-# SUPABASE_SERVICE_ROLE_KEY = ""
-# OPENAI_API_KEY = ""
-# GMAIL_USER = ""
-# GMAIL_APP_PASSWORD = ""
-# CONTACT_EMAIL = ""
-# CORS_ORIGIN = ""
-# FRONTEND_URL = ""
+# CORS_ORIGIN = "https://gestao.pages.dev"
+# FRONTEND_URL = "https://gestao.pages.dev"
 
-# KV Namespaces (para rate limiting)
-# Criar via: wrangler kv:namespace create "RATE_LIMIT"
-# [[kv_namespaces]]
-# binding = "RATE_LIMIT"
-# id = "your-kv-namespace-id"
-# preview_id = "your-preview-kv-namespace-id"
+# Secrets: wrangler secret put JWT_SECRET, etc.
 
-# Nota: O build é feito antes do deploy, não precisa de [build] aqui
-# Limites de CPU não são suportados no plano gratuito
-
-# Configurações de deploy
-[env.production]
-routes = [
-  { pattern = "api.partnerfinancecontrol.com/*", zone_name = "partnerfinancecontrol.com" }
-]
-
-[env.staging]
-routes = [
-  { pattern = "api-staging.partnerfinancecontrol.com/*", zone_name = "partnerfinancecontrol.com" }
-]
+# Rotas customizadas (opcional; sem isso fica em *.workers.dev)
+# [env.production]
+# routes = [
+#   { pattern = "api.seudominio.com/*", zone_name = "seudominio.com" }
+# ]

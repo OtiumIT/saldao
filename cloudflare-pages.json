@@ -4,5 +4,6 @@
   "devCommand": "cd frontend && npm run dev",
   "installCommand": "cd frontend && npm install",
   "framework": "vite",
-  "nodeVersion": "20"
+  "nodeVersion": "20",
+  "projectName": "gestao"
 }
