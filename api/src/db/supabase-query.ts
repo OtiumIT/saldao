@@ -41,18 +41,21 @@ export async function select<T>(
         query = query.like(key, value);
       } else if (typeof value === 'string' && (value.startsWith('<') || value.startsWith('>') || value.startsWith('<=') || value.startsWith('>='))) {
         // Suporte para operadores de comparação
+        // Detectar se é uma data (formato YYYY-MM-DD) ou número
+        const isDate = /^\d{4}-\d{2}-\d{2}/.test(value.substring(value.startsWith('<=') || value.startsWith('>=') ? 2 : 1));
+        
         if (value.startsWith('<=')) {
-          const numValue = parseFloat(value.substring(2));
-          query = query.lte(key, numValue);
+          const actualValue = value.substring(2);
+          query = isDate ? query.lte(key, actualValue) : query.lte(key, parseFloat(actualValue));
         } else if (value.startsWith('>=')) {
-          const numValue = parseFloat(value.substring(2));
-          query = query.gte(key, numValue);
+          const actualValue = value.substring(2);
+          query = isDate ? query.gte(key, actualValue) : query.gte(key, parseFloat(actualValue));
         } else if (value.startsWith('<')) {
-          const numValue = parseFloat(value.substring(1));
-          query = query.lt(key, numValue);
+          const actualValue = value.substring(1);
+          query = isDate ? query.lt(key, actualValue) : query.lt(key, parseFloat(actualValue));
         } else if (value.startsWith('>')) {
-          const numValue = parseFloat(value.substring(1));
-          query = query.gt(key, numValue);
+          const actualValue = value.substring(1);
+          query = isDate ? query.gt(key, actualValue) : query.gt(key, parseFloat(actualValue));
         } else {
           query = query.eq(key, value);
         }
@@ -107,6 +110,25 @@ export async function selectWithCount<T>(
         query = query.in(key, value);
       } else if (typeof value === 'string' && value.includes('%')) {
         query = query.like(key, value);
+      } else if (typeof value === 'string' && (value.startsWith('<') || value.startsWith('>') || value.startsWith('<=') || value.startsWith('>='))) {
+        // Suporte para operadores de comparação
+        const isDate = /^\d{4}-\d{2}-\d{2}/.test(value.substring(value.startsWith('<=') || value.startsWith('>=') ? 2 : 1));
+        
+        if (value.startsWith('<=')) {
+          const actualValue = value.substring(2);
+          query = isDate ? query.lte(key, actualValue) : query.lte(key, parseFloat(actualValue));
+        } else if (value.startsWith('>=')) {
+          const actualValue = value.substring(2);
+          query = isDate ? query.gte(key, actualValue) : query.gte(key, parseFloat(actualValue));
+        } else if (value.startsWith('<')) {
+          const actualValue = value.substring(1);
+          query = isDate ? query.lt(key, actualValue) : query.lt(key, parseFloat(actualValue));
+        } else if (value.startsWith('>')) {
+          const actualValue = value.substring(1);
+          query = isDate ? query.gt(key, actualValue) : query.gt(key, parseFloat(actualValue));
+        } else {
+          query = query.eq(key, value);
+        }
       } else {
         query = query.eq(key, value);
       }
