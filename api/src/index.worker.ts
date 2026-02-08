@@ -141,6 +141,16 @@ function corsErrorResponse(origin: string, message: string, status = 500): Respo
   });
 }
 
+/** Garante CORS em qualquer Response antes de enviar ao cliente (última linha de defesa). */
+function withCors(res: Response, origin: string): Response {
+  const headers = new Headers(res.headers);
+  headers.set('Access-Control-Allow-Origin', origin);
+  headers.set('Access-Control-Allow-Credentials', 'true');
+  headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const origin = env.CORS_ORIGIN || ALLOWED_ORIGIN;
@@ -157,7 +167,7 @@ export default {
         const message = err instanceof Error ? err.message : 'Internal Server Error';
         return corsErrorResponse(origin, message);
       });
-      return res;
+      return withCors(res, origin);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Internal Server Error';
       return corsErrorResponse(origin, message);
