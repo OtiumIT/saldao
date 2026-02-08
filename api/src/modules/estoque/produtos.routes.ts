@@ -156,4 +156,50 @@ export const produtosRoutes = new Hono<Ctx>()
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao excluir produto' }, 500);
     }
+  })
+  .get('/debug/tipos', async (c) => {
+    const auth = await requireAuth(c);
+    if (auth instanceof Response) return auth;
+    try {
+      const { useSupabaseDataAPI } = await import('../../config/db-mode.js');
+      const { getDataClient, db } = await import('../../db/data-api.js');
+      
+      if (!useSupabaseDataAPI(c.env)) {
+        return c.json({ error: 'Este endpoint só funciona com Supabase Data API' }, 400);
+      }
+      
+      const client = getDataClient(c.env);
+      
+      // Buscar todos os produtos sem filtro
+      const todosProdutos = await db.select<{ id: string; codigo: string; tipo: string }>(
+        client,
+        'produtos',
+        {}
+      );
+      
+      // Contar por tipo
+      const porTipo = todosProdutos.reduce((acc, p) => {
+        acc[p.tipo] = (acc[p.tipo] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // Testar filtro de tipo
+      const revendaInsumos = await db.select<{ id: string; codigo: string; tipo: string }>(
+        client,
+        'produtos',
+        {
+          filters: { tipo: ['revenda', 'insumos'] },
+        }
+      );
+      
+      return c.json({
+        total: todosProdutos.length,
+        por_tipo: porTipo,
+        revenda_insumos_count: revendaInsumos.length,
+        revenda_insumos: revendaInsumos.slice(0, 10), // Primeiros 10 para debug
+        todos_tipos: [...new Set(todosProdutos.map((p) => p.tipo))],
+      });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : 'Erro ao debugar' }, 500);
+    }
   });

@@ -17,7 +17,8 @@ export async function listAbaixoMinimo(env: Env): Promise<AvisoCompra[]> {
   const client = getDataClient(env);
   
   // Buscar produtos revenda/insumos
-  const produtos = await db.select<{
+  // Nota: Supabase pode ter problemas com array no filtro, então buscamos todos e filtramos
+  const todosProdutos = await db.select<{
     id: string;
     codigo: string;
     descricao: string;
@@ -26,9 +27,10 @@ export async function listAbaixoMinimo(env: Env): Promise<AvisoCompra[]> {
     estoque_maximo: number | null;
     preco_compra: number;
     fornecedor_principal_id: string | null;
-  }>(client, 'produtos', {
-    filters: { tipo: ['revenda', 'insumos'] },
-  });
+  }>(client, 'produtos', {});
+  
+  // Filtrar por tipo em memória (revenda ou insumos)
+  const produtos = todosProdutos.filter((p) => p.tipo === 'revenda' || p.tipo === 'insumos');
 
   // Buscar saldos de estoque
   const saldos = await db.select<{ produto_id: string; quantidade: number }>(
