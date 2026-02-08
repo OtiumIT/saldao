@@ -35,9 +35,24 @@ export function Layout({ children }: LayoutProps) {
 
   const hasAdminAccess = user?.is_super_admin || user?.can_create_users;
 
-  // Menu organizado por trilha de uso (fluxo do dia a dia da fábrica + revenda)
+  // Menu: Cadastros no topo; depois trilhas de uso (estoque, produção, vendas, etc.)
   const navigation: NavItem[] = [
     { name: 'Início', path: '/' },
+
+    {
+      name: 'Cadastros',
+      defaultCollapsed: true,
+      children: [
+        { name: 'Clientes', path: '/clientes' },
+        { name: 'Fornecedores', path: '/fornecedores' },
+        { name: 'Funcionários', path: '/funcionarios' },
+        { name: 'Produtos', path: '/produtos' },
+        { name: 'Categorias de produto', path: '/categorias-produto' },
+        { name: 'Cores (chapas)', path: '/cores' },
+        { name: 'BOM (receita)', path: '/producao/bom' },
+        ...(hasAdminAccess ? [{ name: 'Usuários', path: '/users' }] : []),
+      ],
+    },
 
     { name: 'Estoque e Compras', isSection: true },
     { name: 'Movimentações', path: '/estoque/movimentacoes' },
@@ -63,21 +78,6 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Categorias de custo', path: '/custos-operacionais/categorias' },
     { name: 'Custos do mês', path: '/custos-operacionais/mes' },
     { name: 'Folha de pagamento', path: '/funcionarios/folha' },
-
-    {
-      name: 'Cadastros',
-      defaultCollapsed: true,
-      children: [
-        { name: 'Clientes', path: '/clientes' },
-        { name: 'Fornecedores', path: '/fornecedores' },
-        { name: 'Funcionários', path: '/funcionarios' },
-        { name: 'Produtos', path: '/produtos' },
-        { name: 'Categorias de produto', path: '/categorias-produto' },
-        { name: 'Cores (chapas)', path: '/cores' },
-        { name: 'BOM (receita)', path: '/producao/bom' },
-        ...(hasAdminAccess ? [{ name: 'Usuários', path: '/users' }] : []),
-      ],
-    },
   ];
 
   return (

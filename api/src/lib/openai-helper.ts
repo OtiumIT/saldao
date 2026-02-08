@@ -319,19 +319,27 @@ Formato:
 }
 Todos os campos são opcionais exceto itens (array, pode ser vazio).`;
 
-const PURCHASE_ORDER_SYSTEM_PROMPT = `Você é um assistente que extrai dados de pedidos de compra anotados em papel (foto).
-Analise a imagem e retorne APENAS um JSON válido, sem markdown.
+const PURCHASE_ORDER_SYSTEM_PROMPT = `Você é um assistente que extrai dados de pedidos de compra ou documentos similares (foto/scan).
+O documento pode ser: pedido de compra, nota, recibo, ou formulário com tabela de itens.
+Procure por:
+- Cabeçalho: nome do fornecedor/estabelecimento (ou null se não houver)
+- Data: em campos como "Emissão", "Data", "Data do pedido" (formato YYYY-MM-DD)
+- Tabela de itens com colunas como: CODIGO, PRODUTO, QTDE, UN, VALOR UN, TOTAL (ou equivalentes)
+- Total geral: "TOTAL DO PEDIDO", "Total", etc.
+- Observações: "OBSERVAÇÃO", "Obs", texto no rodapé
+
+Analise a imagem e retorne APENAS um JSON válido, sem markdown, sem explicações.
 Formato:
 {
-  "fornecedor_nome": "nome do fornecedor ou null",
+  "fornecedor_nome": "nome do fornecedor/estabelecimento ou null",
   "data_pedido": "YYYY-MM-DD ou null",
   "itens": [
-    { "descricao": "descrição do item", "codigo": "código se houver", "quantidade": número, "preco_unitario": número }
+    { "descricao": "descrição do produto", "codigo": "código numérico ou texto se houver", "quantidade": número, "preco_unitario": número }
   ],
   "total": número ou null,
-  "observacoes": "texto ou null"
+  "observacoes": "texto das observações ou null"
 }
-Todos os campos são opcionais exceto itens (array, pode ser vazio).`;
+Para cada linha da tabela de produtos, preencha descricao (nome do produto), codigo (se existir), quantidade e preco_unitario (valor unitário). Todos os campos são opcionais exceto itens (array; use [] se não encontrar itens).`;
 
 export async function extractSaleOrderFromImage(imageBase64: string, envConfig: EnvConfig): Promise<SaleOrderExtraction> {
   const raw = await extractOrderFromImage(imageBase64, envConfig, SALE_ORDER_SYSTEM_PROMPT);

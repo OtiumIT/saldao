@@ -1,4 +1,4 @@
-import { FormEvent, useState, useEffect, useRef } from 'react';
+import { FormEvent, useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../auth/hooks/useAuth';
 import * as comprasService from '../services/compras.service';
 import * as estoqueService from '../../estoque/services/estoque.service';
@@ -43,6 +43,7 @@ export function PedidoCompraForm({ pedidoId, initialItens, initialFornecedorId, 
   const [extractLoading, setExtractLoading] = useState(false);
   const [error, setError] = useState('');
   const [produtosDoFornecedor, setProdutosDoFornecedor] = useState<Produto[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -129,45 +130,72 @@ export function PedidoCompraForm({ pedidoId, initialItens, initialFornecedorId, 
     return null;
   };
 
+  const processFile = useCallback(
+    async (file: File) => {
+      if (!token) return;
+      setError('');
+      setExtractLoading(true);
+      try {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
+          reader.readAsDataURL(file);
+        });
+        const extracted = await comprasService.extractCompraFromImage(base64, token);
+        if (extracted.fornecedor_nome) {
+          const f = fornecedores.find((x) => x.nome?.toLowerCase().includes(extracted.fornecedor_nome!.toLowerCase()));
+          if (f) setFornecedorId(f.id);
+        }
+        if (extracted.data_pedido) setDataPedido(extracted.data_pedido.slice(0, 10));
+        if (extracted.observacoes) setObservacoes(extracted.observacoes ?? '');
+        if (extracted.itens?.length) {
+          const rows: ItemRow[] = extracted.itens.map((item) => {
+            const matched = matchProduto(item.codigo, item.descricao, item.preco_unitario);
+            return {
+              produto_id: matched?.id ?? '',
+              quantidade: item.quantidade || 0,
+              preco_unitario: matched ? matched.preco : item.preco_unitario || 0,
+            };
+          });
+          setItens(rows);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao extrair dados da foto');
+      } finally {
+        setExtractLoading(false);
+      }
+    },
+    [token, fornecedores, matchProduto]
+  );
+
   const handlePreencherPorFoto = () => fileInputRef.current?.click();
 
   const onFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !token) return;
-    setError('');
-    setExtractLoading(true);
-    try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
-        reader.readAsDataURL(file);
-      });
-      const extracted = await comprasService.extractCompraFromImage(base64, token);
-      if (extracted.fornecedor_nome) {
-        const f = fornecedores.find((x) => x.nome?.toLowerCase().includes(extracted.fornecedor_nome!.toLowerCase()));
-        if (f) setFornecedorId(f.id);
-      }
-      if (extracted.data_pedido) setDataPedido(extracted.data_pedido.slice(0, 10));
-      if (extracted.observacoes) setObservacoes(extracted.observacoes);
-      if (extracted.itens?.length) {
-        const rows: ItemRow[] = extracted.itens.map((item) => {
-          const matched = matchProduto(item.codigo, item.descricao, item.preco_unitario);
-          return {
-            produto_id: matched?.id ?? '',
-            quantidade: item.quantidade || 0,
-            preco_unitario: matched ? matched.preco : item.preco_unitario || 0,
-          };
-        });
-        setItens(rows);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao extrair dados da foto');
-    } finally {
-      setExtractLoading(false);
-    }
+    if (file) await processFile(file);
   };
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file && file.type.startsWith('image/')) processFile(file);
+    },
+    [processFile]
+  );
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+  const onDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -214,6 +242,32 @@ export function PedidoCompraForm({ pedidoId, initialItens, initialFornecedorId, 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileSelect} />
+      {!pedidoId && (
+        <div
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
+          onClick={() => !extractLoading && fileInputRef.current?.click()}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          className={`rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+            isDragOver ? 'border-brand-gold bg-amber-50' : 'border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100'
+          } ${extractLoading ? 'pointer-events-none opacity-80' : 'cursor-pointer'}`}
+        >
+          {extractLoading ? (
+            <p className="text-gray-600 font-medium">Analisando foto... Aguarde.</p>
+          ) : (
+            <>
+              <svg className="mx-auto h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="mt-2 text-sm font-medium text-gray-700">Enviar foto do pedido ou documento</p>
+              <p className="mt-1 text-xs text-gray-500">Clique aqui ou arraste a imagem. A IA preenche o formulário.</p>
+            </>
+          )}
+        </div>
+      )}
       {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">{error}</div>}
       <Select
         label="Fornecedor *"
