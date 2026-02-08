@@ -182,48 +182,63 @@ export default {
     
     try {
       // Inicializa pool do Hyperdrive se necessário
-      if (env.HYPERDRIVE?.connectionString && !poolInitialized) {
-        try {
-          const pool = new Pool({
-            connectionString: env.HYPERDRIVE.connectionString,
-            max: 1,
-            // Configurações importantes para Workers
-            statement_timeout: 20000, // 20 segundos (Workers tem limite de 30s CPU)
-            query_timeout: 20000,
-            connectionTimeoutMillis: 10000, // 10 segundos para Hyperdrive estabelecer conexão
-            idleTimeoutMillis: 30000,
-            // SSL necessário para Hyperdrive
-            ssl: {
-              rejectUnauthorized: false,
-            },
-            // Configurações adicionais para melhorar estabilidade
-            allowExitOnIdle: true,
-          });
-          setWorkerPool(pool);
-          poolInitialized = true;
-          
-          // Testa a conexão imediatamente para detectar problemas cedo
+      if (env.HYPERDRIVE?.connectionString) {
+        let pool = getPool();
+        
+        // Se não há pool ou pool foi fechado, cria novo
+        if (!pool || pool.ended) {
           try {
-            await pool.query('SELECT 1');
-          } catch (testError) {
-            console.error('Initial connection test failed:', testError);
-            // Não falha aqui, deixa tentar na primeira query real
+            console.log('Initializing database pool with Hyperdrive...');
+            pool = new Pool({
+              connectionString: env.HYPERDRIVE.connectionString,
+              max: 1,
+              min: 0, // Permite fechar conexões quando idle
+              // Configurações importantes para Workers
+              statement_timeout: 20000, // 20 segundos (Workers tem limite de 30s CPU)
+              query_timeout: 20000,
+              connectionTimeoutMillis: 15000, // 15 segundos para Hyperdrive estabelecer conexão
+              idleTimeoutMillis: 30000,
+              // SSL necessário para Hyperdrive
+              ssl: {
+                rejectUnauthorized: false,
+              },
+              // Configurações adicionais para melhorar estabilidade
+              allowExitOnIdle: true,
+            });
+            
+            // Tratamento de erros do pool
+            pool.on('error', (err) => {
+              console.error('Unexpected pool error:', err);
+              // Reseta o pool para tentar reconectar na próxima requisição
+              poolInitialized = false;
+            });
+            
+            setWorkerPool(pool);
+            poolInitialized = true;
+            
+            console.log('Pool initialized successfully');
+          } catch (poolError) {
+            console.error('Error initializing database pool:', poolError);
+            poolInitialized = false;
+            return jsonResponse({ 
+              error: 'Database connection error', 
+              details: poolError instanceof Error ? poolError.message : 'Unknown error',
+              connectionString: env.HYPERDRIVE.connectionString.substring(0, 50) + '...'
+            }, 500, origin);
           }
-        } catch (poolError) {
-          console.error('Error initializing database pool:', poolError);
+        }
+        
+        // Verifica se o pool está disponível
+        if (!pool || pool.ended) {
           return jsonResponse({ 
-            error: 'Database connection error', 
-            details: poolError instanceof Error ? poolError.message : 'Unknown error' 
+            error: 'Database pool not available',
+            details: 'Pool was closed or not initialized'
           }, 500, origin);
         }
-      }
-      
-      // Verifica se o pool está disponível antes de processar
-      const pool = getPool();
-      if (!pool) {
+      } else {
         return jsonResponse({ 
-          error: 'Database pool not initialized',
-          details: 'HYPERDRIVE binding may be missing or invalid'
+          error: 'HYPERDRIVE binding not found',
+          details: 'Check wrangler.toml configuration'
         }, 500, origin);
       }
       

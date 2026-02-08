@@ -107,19 +107,33 @@ export async function list(filtros?: FiltrosProduto): Promise<Produto[]> {
 
 export async function listComSaldos(filtros?: FiltrosProduto): Promise<ProdutoComSaldo[]> {
   const pool = getPool();
-  if (!pool) return [];
-  const params: unknown[] = [];
-  const idxRef = { idx: 1 };
-  const where = buildWhereClause(filtros, params, idxRef, 'p');
-  const { rows } = await pool.query<ProdutoRow & { saldo: string }>(
-    `SELECT ${SELECT_COLS_P}, COALESCE(s.quantidade, 0)::numeric AS saldo
-     FROM produtos p
-     LEFT JOIN saldo_estoque s ON s.produto_id = p.id
-     ${where}
-     ORDER BY p.codigo`,
-    params
-  );
-  return rows.map((r) => ({ ...mapProdutoRow(r), saldo: Number(r.saldo) }));
+  if (!pool) {
+    throw new Error('Database pool not available');
+  }
+  
+  try {
+    const params: unknown[] = [];
+    const idxRef = { idx: 1 };
+    const where = buildWhereClause(filtros, params, idxRef, 'p');
+    const { rows } = await pool.query<ProdutoRow & { saldo: string }>(
+      `SELECT ${SELECT_COLS_P}, COALESCE(s.quantidade, 0)::numeric AS saldo
+       FROM produtos p
+       LEFT JOIN saldo_estoque s ON s.produto_id = p.id
+       ${where}
+       ORDER BY p.codigo`,
+      params
+    );
+    return rows.map((r) => ({ ...mapProdutoRow(r), saldo: Number(r.saldo) }));
+  } catch (error) {
+    // Log detalhado do erro para debug
+    console.error('Error in listComSaldos:', {
+      message: error instanceof Error ? error.message : String(error),
+      code: (error as any)?.code,
+      errno: (error as any)?.errno,
+      syscall: (error as any)?.syscall,
+    });
+    throw error;
+  }
 }
 
 export async function findById(id: string): Promise<Produto | null> {
