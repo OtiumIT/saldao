@@ -30,6 +30,13 @@ export function setWorkerPool(pool: Pool): void {
 }
 
 export function getPool(): Pool | null {
+  // No Workers, sempre usa workerPool (Hyperdrive)
+  // nodePool só existe em ambiente Node.js
+  if (typeof process === 'undefined' || !process.env) {
+    // Estamos em Workers - só retorna workerPool
+    return workerPool;
+  }
+  // Estamos em Node.js - pode usar nodePool como fallback
   return workerPool ?? nodePool;
 }
 

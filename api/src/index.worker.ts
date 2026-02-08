@@ -181,64 +181,76 @@ export default {
     }
     
     try {
-      // Inicializa pool do Hyperdrive se necessário
-      if (env.HYPERDRIVE?.connectionString) {
-        let pool = getPool();
-        
-        // Se não há pool ou pool foi fechado, cria novo
-        if (!pool || pool.ended) {
-          try {
-            console.log('Initializing database pool with Hyperdrive...');
-            pool = new Pool({
-              connectionString: env.HYPERDRIVE.connectionString,
-              max: 1,
-              min: 0, // Permite fechar conexões quando idle
-              // Configurações importantes para Workers
-              statement_timeout: 20000, // 20 segundos (Workers tem limite de 30s CPU)
-              query_timeout: 20000,
-              connectionTimeoutMillis: 15000, // 15 segundos para Hyperdrive estabelecer conexão
-              idleTimeoutMillis: 30000,
-              // SSL necessário para Hyperdrive
-              ssl: {
-                rejectUnauthorized: false,
-              },
-              // Configurações adicionais para melhorar estabilidade
-              allowExitOnIdle: true,
-            });
-            
-            // Tratamento de erros do pool
-            pool.on('error', (err) => {
-              console.error('Unexpected pool error:', err);
-              // Reseta o pool para tentar reconectar na próxima requisição
-              poolInitialized = false;
-            });
-            
-            setWorkerPool(pool);
-            poolInitialized = true;
-            
-            console.log('Pool initialized successfully');
-          } catch (poolError) {
-            console.error('Error initializing database pool:', poolError);
-            poolInitialized = false;
-            return jsonResponse({ 
-              error: 'Database connection error', 
-              details: poolError instanceof Error ? poolError.message : 'Unknown error',
-              connectionString: env.HYPERDRIVE.connectionString.substring(0, 50) + '...'
-            }, 500, origin);
-          }
-        }
-        
-        // Verifica se o pool está disponível
-        if (!pool || pool.ended) {
-          return jsonResponse({ 
-            error: 'Database pool not available',
-            details: 'Pool was closed or not initialized'
-          }, 500, origin);
-        }
-      } else {
+      // Inicializa pool do Hyperdrive - OBRIGATÓRIO no Workers
+      if (!env.HYPERDRIVE?.connectionString) {
+        console.error('HYPERDRIVE binding not found in env:', Object.keys(env));
         return jsonResponse({ 
           error: 'HYPERDRIVE binding not found',
-          details: 'Check wrangler.toml configuration'
+          details: 'Check wrangler.toml configuration. HYPERDRIVE binding is required.',
+          availableBindings: Object.keys(env).filter(k => k.includes('HYPER') || k.includes('DATABASE'))
+        }, 500, origin);
+      }
+      
+      let pool = getPool();
+      
+      // Se não há pool ou pool foi fechado, cria novo
+      if (!pool || pool.ended) {
+        try {
+          console.log('Initializing database pool with Hyperdrive...', {
+            connectionStringPrefix: env.HYPERDRIVE.connectionString.substring(0, 50) + '...',
+            hasConnectionString: !!env.HYPERDRIVE.connectionString
+          });
+          
+          pool = new Pool({
+            connectionString: env.HYPERDRIVE.connectionString,
+            max: 1,
+            min: 0, // Permite fechar conexões quando idle
+            // Configurações importantes para Workers
+            statement_timeout: 20000, // 20 segundos (Workers tem limite de 30s CPU)
+            query_timeout: 20000,
+            connectionTimeoutMillis: 15000, // 15 segundos para Hyperdrive estabelecer conexão
+            idleTimeoutMillis: 30000,
+            // SSL necessário para Hyperdrive
+            ssl: {
+              rejectUnauthorized: false,
+            },
+            // Configurações adicionais para melhorar estabilidade
+            allowExitOnIdle: true,
+          });
+          
+          // Tratamento de erros do pool
+          pool.on('error', (err) => {
+            console.error('Unexpected pool error:', err);
+            // Reseta o pool para tentar reconectar na próxima requisição
+            poolInitialized = false;
+          });
+          
+          setWorkerPool(pool);
+          poolInitialized = true;
+          
+          console.log('Pool initialized successfully');
+        } catch (poolError) {
+          console.error('Error initializing database pool:', poolError);
+          poolInitialized = false;
+          const errorDetails = poolError instanceof Error ? {
+            message: poolError.message,
+            name: poolError.name,
+            stack: poolError.stack?.split('\n').slice(0, 3).join('\n')
+          } : { error: String(poolError) };
+          
+          return jsonResponse({ 
+            error: 'Database connection error', 
+            details: errorDetails,
+            connectionStringPrefix: env.HYPERDRIVE.connectionString.substring(0, 50) + '...'
+          }, 500, origin);
+        }
+      }
+      
+      // Verifica se o pool está disponível
+      if (!pool || pool.ended) {
+        return jsonResponse({ 
+          error: 'Database pool not available',
+          details: 'Pool was closed or not initialized'
         }, 500, origin);
       }
       
