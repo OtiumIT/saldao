@@ -55,46 +55,43 @@ Isso cria todas as tabelas, índices e views no Supabase (sem dados).
 
 ---
 
-## 3. Exportar dados do banco local
+## 3. Exportar e importar dados (script único)
 
-No seu Mac/PC, com o Postgres local rodando:
-
-```bash
-# Ajuste o nome do banco e usuário se necessário
-pg_dump -d saldao_jerusalem -U "$USER" --data-only --column-inserts -f /tmp/saldao_data.sql
-```
-
-- `--data-only`: só dados, não schema.
-- `--column-inserts`: gera `INSERT INTO ... (col1, col2) VALUES (...)` em vez de `COPY`, o que funciona melhor entre ambientes.
-
-Se der erro de permissão ou de extensão, use:
+Use o script que exporta do banco local e importa no Supabase:
 
 ```bash
-pg_dump -d saldao_jerusalem --data-only --column-inserts --no-owner --no-privileges -f /tmp/saldao_data.sql
+# Na raiz do repositório. O script usa .env se existir (DATABASE_URL = local).
+export LOCAL_DATABASE_URL="postgresql://localhost:5432/saldao_jerusalem"
+export SUPABASE_DATABASE_URL="postgresql://postgres.[PROJECT]:[SENHA]@aws-0-[REGIAO].pooler.supabase.com:6543/postgres"
+
+./scripts/migrate-data-local-to-supabase.sh
 ```
+
+O script faz:
+1. `pg_dump` do banco local com `--data-only --column-inserts`
+2. Import no Supabase com `session_replication_role = replica` (evita conflito de FKs)
+
+O dump fica em `tmp/saldao_data_*.sql` para eventual nova importação ou conferência.
 
 ---
 
-## 4. Importar os dados no Supabase
+## 4. (Alternativa) Exportar e importar manualmente
 
-Antes de importar, desative triggers temporariamente para evitar conflitos com FKs e regras:
-
-```bash
-# SUPABASE_URL = connection string do Supabase (pooler ou direta)
-psql "$SUPABASE_URL" -c "SET session_replication_role = replica;"
-psql "$SUPABASE_URL" -f /tmp/saldao_data.sql
-psql "$SUPABASE_URL" -c "SET session_replication_role = DEFAULT;"
-```
-
-Ou em um único passo (bash):
+Se preferir fazer à mão:
 
 ```bash
-export SUPABASE_URL="postgresql://postgres.XXXXX:SuaSenha@...pooler.supabase.com:6543/postgres"
+# Exportar
+pg_dump -d saldao_jerusalem -U "$USER" --data-only --column-inserts --no-owner --no-privileges -f /tmp/saldao_data.sql
 
-psql "$SUPABASE_URL" -v ON_ERROR_STOP=1 -c "SET session_replication_role = replica;" -f /tmp/saldao_data.sql -c "SET session_replication_role = DEFAULT;"
+# Importar (SUPABASE_DATABASE_URL = connection string do Supabase)
+export PGSSLMODE=require
+psql "$SUPABASE_DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -c "SET session_replication_role = replica;" \
+  -f /tmp/saldao_data.sql \
+  -c "SET session_replication_role = DEFAULT;"
 ```
 
-Se alguma tabela tiver conflito de ID (por exemplo, sequências), edite `/tmp/saldao_data.sql` e ajuste os `INSERT` ou as sequências depois. Em seguida, corrija as sequences:
+Se alguma tabela tiver conflito de ID (por exemplo, sequências), edite o `.sql` e ajuste os `INSERT` ou as sequências depois. Em seguida, corrija as sequences:
 
 ```sql
 -- No Supabase (SQL Editor ou psql), para tabelas com serial/id gerado:
@@ -130,9 +127,8 @@ DATABASE_URL=postgresql://postgres.[PROJECT-REF]:[SENHA]@aws-0-[REGIAO].pooler.s
 | Passo | Ação |
 |-------|------|
 | 1 | Criar projeto no Supabase e copiar connection string (pooler 6543) |
-| 2 | `export DATABASE_URL="..."; ./scripts/run-migrations.sh` |
-| 3 | `pg_dump -d saldao_jerusalem --data-only --column-inserts -f /tmp/saldao_data.sql` |
-| 4 | `psql "$SUPABASE_URL" -c "SET session_replication_role = replica;" -f /tmp/saldao_data.sql -c "SET session_replication_role = DEFAULT;"` |
-| 5 | Definir `DATABASE_URL` do Supabase no ambiente da API |
+| 2 | `export DATABASE_URL="..."; ./scripts/run-migrations.sh` (aplicar schema no Supabase) |
+| 3 | `export LOCAL_DATABASE_URL="..."; export SUPABASE_DATABASE_URL="..."; ./scripts/migrate-data-local-to-supabase.sh` |
+| 4 | Definir `DATABASE_URL` (ou Supabase Data API) no ambiente da API |
 
 Depois disso, frontend e API podem ser publicados (Cloudflare Pages + Workers ou outro host) usando esse mesmo banco no Supabase.

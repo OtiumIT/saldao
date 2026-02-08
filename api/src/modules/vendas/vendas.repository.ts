@@ -93,6 +93,19 @@ export async function create(data: {
 }): Promise<PedidoVenda> {
   const pool = getPool();
   if (!pool) throw new Error('DATABASE_URL não configurada');
+  const produtoIds = [...new Set(data.itens.map((i) => i.produto_id))];
+  if (produtoIds.length > 0) {
+    const { rows: prodRows } = await pool.query<{ id: string; tipo: string; codigo: string }>(
+      'SELECT id, tipo, codigo FROM produtos WHERE id = ANY($1)',
+      [produtoIds]
+    );
+    const insumos = prodRows.filter((p) => p.tipo === 'insumos');
+    if (insumos.length > 0) {
+      throw new Error(
+        `Na venda só são permitidos produtos de revenda ou fabricação. Remova os insumos: ${insumos.map((p) => p.codigo).join(', ')}`
+      );
+    }
+  }
   const dataPedido = data.data_pedido ?? new Date().toISOString().slice(0, 10);
   const valorFrete = data.valor_frete ?? 0;
   const client = await pool.connect();
@@ -154,6 +167,20 @@ export async function update(id: string, data: {
       [id, data.cliente_id ?? null, data.data_pedido ?? null, data.tipo_entrega ?? null, data.endereco_entrega ?? null, data.observacoes ?? null, previsao, distanciaKm ?? null, valorFrete]
     );
     if (data.itens) {
+      const produtoIds = [...new Set(data.itens.map((i) => i.produto_id))];
+      if (produtoIds.length > 0) {
+        const { rows: prodRows } = await client.query<{ id: string; tipo: string; codigo: string }>(
+          'SELECT id, tipo, codigo FROM produtos WHERE id = ANY($1)',
+          [produtoIds]
+        );
+        const insumos = prodRows.filter((p) => p.tipo === 'insumos');
+        if (insumos.length > 0) {
+          await client.query('ROLLBACK');
+          throw new Error(
+            `Na venda só são permitidos produtos de revenda ou fabricação. Remova os insumos: ${insumos.map((p) => p.codigo).join(', ')}`
+          );
+        }
+      }
       await client.query('DELETE FROM itens_pedido_venda WHERE pedido_venda_id = $1', [id]);
       let totalItens = 0;
       for (const it of data.itens) {
@@ -191,6 +218,13 @@ export async function confirmar(id: string, options?: { previsao_entrega_em_dias
   if (!pedido) return { ok: false, error: 'Pedido não encontrado' };
   if (pedido.status !== 'rascunho') return { ok: false, error: 'Pedido já confirmado ou cancelado' };
   const itens = await listItens(id);
+  const itensInsumos = itens.filter((it) => it.produto_tipo === 'insumos');
+  if (itensInsumos.length > 0) {
+    return {
+      ok: false,
+      error: `Na venda só são permitidos produtos de revenda ou fabricação. Remova os insumos: ${itensInsumos.map((it) => it.produto_codigo ?? it.produto_id).join(', ')}`,
+    };
+  }
   const client = await pool.connect();
   try {
     let temSemEstoque = false;

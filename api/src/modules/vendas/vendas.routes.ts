@@ -102,7 +102,9 @@ export const vendasRoutes = new Hono<Ctx>()
       const created = await vendasService.create(c.env, parsed.data);
       return c.json(created, 201);
     } catch (e) {
-      return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar' }, 500);
+      const msg = e instanceof Error ? e.message : 'Erro ao criar';
+      const isValidation = typeof msg === 'string' && msg.includes('revenda ou fabricação');
+      return c.json({ error: msg }, isValidation ? 400 : 500);
     }
   })
   .patch('/:id', async (c) => {
@@ -117,7 +119,9 @@ export const vendasRoutes = new Hono<Ctx>()
       if (!updated) return c.json({ error: 'Pedido não encontrado ou não é rascunho' }, 404);
       return c.json(updated);
     } catch (e) {
-      return c.json({ error: e instanceof Error ? e.message : 'Erro ao atualizar' }, 500);
+      const msg = e instanceof Error ? e.message : 'Erro ao atualizar';
+      const isValidation = typeof msg === 'string' && msg.includes('revenda ou fabricação');
+      return c.json({ error: msg }, isValidation ? 400 : 500);
     }
   })
   .post('/:id/confirmar', async (c) => {

@@ -24,7 +24,9 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
   const { token } = useAuth();
   const { produtos: produtosRaw } = useProdutos(true);
   const { clientes: clientesRaw } = useClients();
-  const produtos = Array.isArray(produtosRaw) ? produtosRaw : [];
+  const produtosAll = Array.isArray(produtosRaw) ? produtosRaw : [];
+  /** Na venda só entram produtos de revenda ou fabricação; insumos não são vendidos */
+  const produtos = produtosAll.filter((p) => p.tipo === 'revenda' || p.tipo === 'fabricado');
   const clientes = Array.isArray(clientesRaw) ? clientesRaw : [];
   const [cliente_id, setClienteId] = useState('');
   const [data_pedido, setDataPedido] = useState('');
@@ -295,7 +297,7 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
           <p className="font-semibold text-gray-900">Total: R$ {totalGeral.toFixed(2)}</p>
         </div>
         {itensSemEstoqueNaoFabricados.length > 0 && (
-          <p className="text-sm text-red-600 font-medium mt-1">Apenas produtos fabricados podem ser vendidos sem estoque. Ajuste as quantidades dos itens acima (revenda/insumos).</p>
+          <p className="text-sm text-red-600 font-medium mt-1">Apenas produtos fabricados podem ser vendidos sem estoque. Ajuste as quantidades dos itens de revenda acima.</p>
         )}
         {soFabricadosSemEstoque && (
           <div className="mt-2 p-2 rounded bg-amber-50 border border-amber-200">

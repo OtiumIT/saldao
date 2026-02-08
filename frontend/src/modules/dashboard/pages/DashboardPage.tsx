@@ -185,7 +185,7 @@ export function DashboardPage() {
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Ações rápidas</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <Link
-            to="/vendas"
+            to="/vendas/caixa"
             className="flex items-center gap-3 p-4 bg-white rounded-lg shadow border border-gray-200 hover:bg-amber-50 hover:border-amber-200 transition-colors touch-manipulation"
           >
             <span className="p-2 rounded-lg bg-brand-gold/20 text-brand-gold">
@@ -195,7 +195,7 @@ export function DashboardPage() {
             </span>
             <div>
               <span className="font-medium text-gray-900">Nova venda</span>
-              <p className="text-xs text-gray-500">Registrar venda (caixa)</p>
+              <p className="text-xs text-gray-500">Abrir caixa</p>
             </div>
           </Link>
           <Link

@@ -1,12 +1,8 @@
-import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useVendas } from '../hooks/useVendas';
 import { Button } from '../../../components/ui/Button';
-import { Modal } from '../../../components/ui/Modal';
 import { DataTable } from '../../../components/ui/DataTable';
-import { ErrorBoundary } from '../../../components/ErrorBoundary';
-import { RegistroVendaModal } from '../components/RegistroVendaModal';
 import type { PedidoVendaComCliente } from '../types/vendas.types';
-import type { CreatePedidoVendaRequest } from '../types/vendas.types';
 
 const STATUS_LABEL: Record<string, string> = {
   rascunho: 'Rascunho',
@@ -16,13 +12,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export function VendasListPage() {
-  const { pedidos, loading, error, fetchPedidos, createPedido, confirmar, marcarEntregue } = useVendas();
-  const [modalAberta, setModalAberta] = useState(false);
-
-  const handleSaved = async (data: CreatePedidoVendaRequest) => {
-    await createPedido(data);
-    setModalAberta(false);
-  };
+  const { pedidos, loading, error, fetchPedidos, confirmar, marcarEntregue } = useVendas();
 
   const handleConfirmar = async (p: PedidoVendaComCliente) => {
     if (!confirm('Confirmar pedido? Será dada baixa no estoque.')) return;
@@ -76,13 +66,17 @@ export function VendasListPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Vendas</h1>
-        <Button onClick={() => setModalAberta(true)} className="w-full sm:w-auto">Nova venda (caixa)</Button>
+        <Link to="/vendas/caixa">
+          <Button className="w-full sm:w-auto">Abrir caixa</Button>
+        </Link>
       </div>
 
       {pedidos.length === 0 && !loading ? (
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <p className="text-gray-500 mb-4">Nenhuma venda registrada</p>
-          <Button onClick={() => setModalAberta(true)}>Registrar primeira venda</Button>
+          <Link to="/vendas/caixa">
+            <Button>Abrir caixa e registrar venda</Button>
+          </Link>
         </div>
       ) : (
         <DataTable
@@ -114,12 +108,6 @@ export function VendasListPage() {
           emptyMessage="Nenhuma venda"
         />
       )}
-
-      <Modal isOpen={modalAberta} onClose={() => setModalAberta(false)} title="Registro de venda (caixa)">
-        <ErrorBoundary onClose={() => setModalAberta(false)}>
-          <RegistroVendaModal onSaved={handleSaved} onCancel={() => setModalAberta(false)} />
-        </ErrorBoundary>
-      </Modal>
     </div>
   );
 }

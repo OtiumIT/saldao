@@ -109,6 +109,18 @@ export async function create(
   }
 ): Promise<PedidoVenda> {
   const client = getDataClient(env);
+  const produtoIds = [...new Set(data.itens.map((i) => i.produto_id))];
+  if (produtoIds.length > 0) {
+    const produtos = await db.select<{ id: string; tipo: string; codigo: string }>(client, 'produtos', {
+      filters: { id: produtoIds },
+    });
+    const insumos = produtos.filter((p) => p.tipo === 'insumos');
+    if (insumos.length > 0) {
+      throw new Error(
+        `Na venda só são permitidos produtos de revenda ou fabricação. Remova os insumos: ${insumos.map((p) => p.codigo).join(', ')}`
+      );
+    }
+  }
   const dataPedido = data.data_pedido ?? new Date().toISOString().slice(0, 10);
   const valorFrete = data.valor_frete ?? 0;
 
@@ -182,6 +194,18 @@ export async function update(
   }
 
   if (data.itens) {
+    const produtoIds = [...new Set(data.itens.map((i) => i.produto_id))];
+    if (produtoIds.length > 0) {
+      const produtos = await db.select<{ id: string; tipo: string; codigo: string }>(client, 'produtos', {
+        filters: { id: produtoIds },
+      });
+      const insumos = produtos.filter((p) => p.tipo === 'insumos');
+      if (insumos.length > 0) {
+        throw new Error(
+          `Na venda só são permitidos produtos de revenda ou fabricação. Remova os insumos: ${insumos.map((p) => p.codigo).join(', ')}`
+        );
+      }
+    }
     // Deletar itens antigos
     const itensAntigos = await db.select<ItemPedidoVenda>(client, 'itens_pedido_venda', {
       filters: { pedido_venda_id: id },
@@ -222,6 +246,14 @@ export async function confirmar(
   if (pedido.status !== 'rascunho') return { ok: false, error: 'Pedido já confirmado ou cancelado' };
 
   const itens = await listItens(env, id);
+
+  const itensInsumos = itens.filter((it) => it.produto_tipo === 'insumos');
+  if (itensInsumos.length > 0) {
+    return {
+      ok: false,
+      error: `Na venda só são permitidos produtos de revenda ou fabricação. Remova os insumos: ${itensInsumos.map((it) => it.produto_codigo ?? it.produto_id).join(', ')}`,
+    };
+  }
 
   let temSemEstoque = false;
   const itensSemEstoqueNaoFabricado: string[] = [];
