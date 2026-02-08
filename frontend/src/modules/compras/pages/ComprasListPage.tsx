@@ -54,9 +54,14 @@ export function ComprasListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Pedidos de compra</h1>
-        <Button onClick={() => { setEditingId(null); setIsFormOpen(true); }}>Novo pedido</Button>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Pedidos de compra</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            No novo pedido você pode enviar uma foto do documento: a IA (OpenAI) preenche fornecedor, data, itens e totais.
+          </p>
+        </div>
+        <Button onClick={() => { setEditingId(null); setIsFormOpen(true); }} className="sm:flex-shrink-0">Novo pedido</Button>
       </div>
 
       {pedidos.length === 0 && !loading ? (

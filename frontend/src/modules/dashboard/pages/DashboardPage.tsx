@@ -53,11 +53,15 @@ export function DashboardPage() {
       .finally(() => setLoadingFinanceiro(false));
   }, [token, data_inicio, data_fim]);
 
-  const totalVendasMes = useMemo(
-    () => pedidosMes.reduce((s, p) => s + Number(p.total ?? 0), 0),
+  const vendasNaoCanceladas = useMemo(
+    () => pedidosMes.filter((p) => p.status !== 'cancelado'),
     [pedidosMes]
   );
-  const countVendasMes = pedidosMes.length;
+  const totalVendasMes = useMemo(
+    () => vendasNaoCanceladas.reduce((s, p) => s + Number(p.total ?? 0), 0),
+    [vendasNaoCanceladas]
+  );
+  const countVendasMes = vendasNaoCanceladas.length;
   const countAbaixoMinimo = avisos.length;
   const countPendentesEntrega = pendentesEntrega.length;
 
