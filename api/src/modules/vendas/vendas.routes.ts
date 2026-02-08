@@ -52,7 +52,7 @@ export const vendasRoutes = new Hono<Ctx>()
     const produto_id = c.req.query('produto_id');
     if (!produto_id) return c.json({ error: 'produto_id obrigatório' }, 400);
     try {
-      const result = await vendasService.getPrecoSugerido(produto_id);
+      const result = await vendasService.getPrecoSugerido(c.env, produto_id);
       return c.json(result);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro' }, 500);
@@ -64,7 +64,7 @@ export const vendasRoutes = new Hono<Ctx>()
     const produto_id = c.req.query('produto_id');
     if (!produto_id) return c.json({ error: 'produto_id obrigatório' }, 400);
     try {
-      const list = await vendasService.getItensSugeridos(produto_id);
+      const list = await vendasService.getItensSugeridos(c.env, produto_id);
       return c.json(list);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro' }, 500);
@@ -77,7 +77,7 @@ export const vendasRoutes = new Hono<Ctx>()
     const data_inicio = c.req.query('data_inicio');
     const data_fim = c.req.query('data_fim');
     try {
-      const list = await vendasService.list({ status, data_inicio, data_fim });
+      const list = await vendasService.list(c.env, { status, data_inicio, data_fim });
       return c.json(list);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao listar' }, 500);
@@ -87,9 +87,9 @@ export const vendasRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
-    const pedido = await vendasService.findById(id);
+    const pedido = await vendasService.findById(c.env, id);
     if (!pedido) return c.json({ error: 'Pedido não encontrado' }, 404);
-    const itens = await vendasService.listItens(id);
+    const itens = await vendasService.listItens(c.env, id);
     return c.json({ ...pedido, itens });
   })
   .post('/', async (c) => {
@@ -99,7 +99,7 @@ export const vendasRoutes = new Hono<Ctx>()
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     try {
-      const created = await vendasService.create(parsed.data);
+      const created = await vendasService.create(c.env, parsed.data);
       return c.json(created, 201);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar' }, 500);
@@ -113,7 +113,7 @@ export const vendasRoutes = new Hono<Ctx>()
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     try {
-      const updated = await vendasService.update(id, parsed.data);
+      const updated = await vendasService.update(c.env, id, parsed.data);
       if (!updated) return c.json({ error: 'Pedido não encontrado ou não é rascunho' }, 404);
       return c.json(updated);
     } catch (e) {
@@ -133,9 +133,9 @@ export const vendasRoutes = new Hono<Ctx>()
       /* body vazio */
     }
     try {
-      const result = await vendasService.confirmar(id, { previsao_entrega_em_dias: previsao });
+      const result = await vendasService.confirmar(c.env, id, { previsao_entrega_em_dias: previsao });
       if (!result.ok) return c.json({ error: result.error ?? 'Erro' }, 400);
-      const pedido = await vendasService.findById(id);
+      const pedido = await vendasService.findById(c.env, id);
       return c.json(pedido ?? { ok: true });
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro' }, 500);
@@ -146,7 +146,7 @@ export const vendasRoutes = new Hono<Ctx>()
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
     try {
-      const updated = await vendasService.marcarEntregue(id);
+      const updated = await vendasService.marcarEntregue(c.env, id);
       if (!updated) return c.json({ error: 'Pedido não encontrado ou não está confirmado' }, 404);
       return c.json(updated);
     } catch (e) {

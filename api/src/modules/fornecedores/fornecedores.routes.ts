@@ -27,7 +27,7 @@ export const fornecedoresRoutes = new Hono<Ctx>()
     const filtros =
       tipo === 'insumos' || tipo === 'revenda' ? { tipo: tipo as 'insumos' | 'revenda' } : undefined;
     try {
-      const list = await fornecedoresService.list(filtros);
+      const list = await fornecedoresService.list(c.env, filtros);
       return c.json(list);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao listar fornecedores' }, 500);
@@ -37,7 +37,7 @@ export const fornecedoresRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
-    const fornecedor = await fornecedoresService.findById(id);
+    const fornecedor = await fornecedoresService.findById(c.env, id);
     if (!fornecedor) return c.json({ error: 'Fornecedor não encontrado' }, 404);
     return c.json(fornecedor);
   })
@@ -50,7 +50,7 @@ export const fornecedoresRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      const created = await fornecedoresService.create(parsed.data);
+      const created = await fornecedoresService.create(c.env, parsed.data);
       return c.json(created, 201);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar fornecedor' }, 500);
@@ -66,7 +66,7 @@ export const fornecedoresRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      const updated = await fornecedoresService.update(id, parsed.data);
+      const updated = await fornecedoresService.update(c.env, id, parsed.data);
       if (!updated) return c.json({ error: 'Fornecedor não encontrado' }, 404);
       return c.json(updated);
     } catch (e) {
@@ -78,7 +78,7 @@ export const fornecedoresRoutes = new Hono<Ctx>()
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
     try {
-      const ok = await fornecedoresService.remove(id);
+      const ok = await fornecedoresService.remove(c.env, id);
       if (!ok) return c.json({ error: 'Fornecedor não encontrado' }, 404);
       return new Response(null, { status: 204 });
     } catch (e) {

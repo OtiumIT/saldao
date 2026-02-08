@@ -21,7 +21,7 @@ export const coresRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     try {
-      const list = await coresService.list();
+      const list = await coresService.list(c.env);
       return c.json(list);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao listar cores' }, 500);
@@ -31,7 +31,7 @@ export const coresRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
-    const cor = await coresService.findById(id);
+    const cor = await coresService.findById(c.env, id);
     if (!cor) return c.json({ error: 'Cor não encontrada' }, 404);
     return c.json(cor);
   })
@@ -42,7 +42,7 @@ export const coresRoutes = new Hono<Ctx>()
     const parsed = createCorSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     try {
-      const created = await coresService.create(parsed.data);
+      const created = await coresService.create(c.env, parsed.data);
       return c.json(created, 201);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar cor' }, 500);
@@ -55,7 +55,7 @@ export const coresRoutes = new Hono<Ctx>()
     const body = await c.req.json();
     const parsed = updateCorSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
-    const updated = await coresService.update(id, parsed.data);
+    const updated = await coresService.update(c.env, id, parsed.data);
     if (!updated) return c.json({ error: 'Cor não encontrada' }, 404);
     return c.json(updated);
   })
@@ -63,7 +63,7 @@ export const coresRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
-    const ok = await coresService.remove(id);
+    const ok = await coresService.remove(c.env, id);
     if (!ok) return c.json({ error: 'Cor não encontrada' }, 404);
     return new Response(null, { status: 204 });
   });

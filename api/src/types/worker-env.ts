@@ -5,6 +5,8 @@ export interface Env {
   // Supabase (opcional quando FIXED_AUTH=true)
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
+  // Usar Supabase Data API em vez de PostgreSQL direto
+  USE_SUPABASE_DATA_API?: string;
 
   // Autenticação fixa (por hora, sem Supabase)
   FIXED_AUTH?: string;

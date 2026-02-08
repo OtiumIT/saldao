@@ -17,7 +17,7 @@ export const categoriasProdutoRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     try {
-      const list = await categoriasProdutoService.list();
+      const list = await categoriasProdutoService.list(c.env);
       return c.json(list);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao listar categorias' }, 500);
@@ -27,7 +27,7 @@ export const categoriasProdutoRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
-    const cat = await categoriasProdutoService.findById(id);
+    const cat = await categoriasProdutoService.findById(c.env, id);
     if (!cat) return c.json({ error: 'Categoria não encontrada' }, 404);
     return c.json(cat);
   })
@@ -40,7 +40,7 @@ export const categoriasProdutoRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      const created = await categoriasProdutoService.create(parsed.data);
+      const created = await categoriasProdutoService.create(c.env, parsed.data);
       return c.json(created, 201);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar categoria' }, 500);
@@ -56,7 +56,7 @@ export const categoriasProdutoRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      const updated = await categoriasProdutoService.update(id, parsed.data);
+      const updated = await categoriasProdutoService.update(c.env, id, parsed.data);
       if (!updated) return c.json({ error: 'Categoria não encontrada' }, 404);
       return c.json(updated);
     } catch (e) {
@@ -68,7 +68,7 @@ export const categoriasProdutoRoutes = new Hono<Ctx>()
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
     try {
-      const ok = await categoriasProdutoService.remove(id);
+      const ok = await categoriasProdutoService.remove(c.env, id);
       if (!ok) return c.json({ error: 'Categoria não encontrada' }, 404);
       return new Response(null, { status: 204 });
     } catch (e) {

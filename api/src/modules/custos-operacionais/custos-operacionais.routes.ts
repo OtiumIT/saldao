@@ -30,20 +30,20 @@ export const custosOperacionaisRoutes = new Hono<Ctx>()
   .get('/categorias', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
-    const list = await custosOperacionaisService.listCategorias();
+    const list = await custosOperacionaisService.listCategorias(c.env);
     return c.json(list);
   })
   .get('/categorias/ativas', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
-    const list = await custosOperacionaisService.listCategoriasAtivas();
+    const list = await custosOperacionaisService.listCategoriasAtivas(c.env);
     return c.json(list);
   })
   .get('/categorias/:id', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
-    const cat = await custosOperacionaisService.findCategoriaById(id);
+    const cat = await custosOperacionaisService.findCategoriaById(c.env, id);
     if (!cat) return c.json({ error: 'Categoria não encontrada' }, 404);
     return c.json(cat);
   })
@@ -54,7 +54,7 @@ export const custosOperacionaisRoutes = new Hono<Ctx>()
     const parsed = categoriaSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     try {
-      const created = await custosOperacionaisService.createCategoria(parsed.data);
+      const created = await custosOperacionaisService.createCategoria(c.env, parsed.data);
       return c.json(created, 201);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar categoria' }, 500);
@@ -68,7 +68,7 @@ export const custosOperacionaisRoutes = new Hono<Ctx>()
     const parsed = categoriaSchema.partial().safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     try {
-      const updated = await custosOperacionaisService.updateCategoria(id, parsed.data);
+      const updated = await custosOperacionaisService.updateCategoria(c.env, id, parsed.data);
       if (!updated) return c.json({ error: 'Categoria não encontrada' }, 404);
       return c.json(updated);
     } catch (e) {
@@ -79,7 +79,7 @@ export const custosOperacionaisRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
-    const ok = await custosOperacionaisService.removeCategoria(id);
+    const ok = await custosOperacionaisService.removeCategoria(c.env, id);
     if (!ok) return c.json({ error: 'Categoria não encontrada' }, 404);
     return new Response(null, { status: 204 });
   })
@@ -92,8 +92,8 @@ export const custosOperacionaisRoutes = new Hono<Ctx>()
     const anoN = parseInt(ano, 10);
     const mesN = parseInt(mes, 10);
     if (isNaN(anoN) || isNaN(mesN) || mesN < 1 || mesN > 12) return c.json({ error: 'ano/mes inválidos' }, 400);
-    const list = await custosOperacionaisService.listCustosByPeriodo(anoN, mesN);
-    const totais = await custosOperacionaisService.totalCustosMes(anoN, mesN);
+    const list = await custosOperacionaisService.listCustosByPeriodo(c.env, anoN, mesN);
+    const totais = await custosOperacionaisService.totalCustosMes(c.env, anoN, mesN);
     return c.json({ data: { list, totais } });
   })
   .post('/mes', async (c) => {
@@ -104,11 +104,12 @@ export const custosOperacionaisRoutes = new Hono<Ctx>()
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     try {
       const result = await custosOperacionaisService.upsertCustosMes(
+        c.env,
         parsed.data.ano,
         parsed.data.mes,
         parsed.data.itens
       );
-      const totais = await custosOperacionaisService.totalCustosMes(parsed.data.ano, parsed.data.mes);
+      const totais = await custosOperacionaisService.totalCustosMes(c.env, parsed.data.ano, parsed.data.mes);
       return c.json({ data: { list: result, totais } });
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao salvar custos' }, 500);

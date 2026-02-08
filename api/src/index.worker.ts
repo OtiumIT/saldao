@@ -208,7 +208,7 @@ export default {
             // Configurações importantes para Workers
             statement_timeout: 20000, // 20 segundos (Workers tem limite de 30s CPU)
             query_timeout: 20000,
-            connectionTimeoutMillis: 15000, // 15 segundos para Hyperdrive estabelecer conexão
+            connectionTimeoutMillis: 20000, // 20 segundos para Hyperdrive estabelecer conexão (aumentado para testar)
             idleTimeoutMillis: 30000,
             // SSL necessário para Hyperdrive
             ssl: {

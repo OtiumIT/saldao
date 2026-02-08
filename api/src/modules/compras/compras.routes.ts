@@ -60,7 +60,7 @@ export const comprasRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     try {
-      const list = await comprasService.list();
+      const list = await comprasService.list(c.env);
       return c.json(list);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao listar pedidos' }, 500);
@@ -72,7 +72,7 @@ export const comprasRoutes = new Hono<Ctx>()
     const fornecedor_id = c.req.query('fornecedor_id');
     if (!fornecedor_id) return c.json({ error: 'fornecedor_id é obrigatório' }, 400);
     try {
-      const map = await comprasService.getUltimosPrecos(fornecedor_id);
+      const map = await comprasService.getUltimosPrecos(c.env, fornecedor_id);
       return c.json(map);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao buscar últimos preços' }, 500);
@@ -82,9 +82,9 @@ export const comprasRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
-    const pedido = await comprasService.findById(id);
+    const pedido = await comprasService.findById(c.env, id);
     if (!pedido) return c.json({ error: 'Pedido não encontrado' }, 404);
-    const itens = await comprasService.listItens(id);
+    const itens = await comprasService.listItens(c.env, id);
     return c.json({ ...pedido, itens });
   })
   .post('/', async (c) => {
@@ -96,7 +96,7 @@ export const comprasRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      const created = await comprasService.createPedido(parsed.data);
+      const created = await comprasService.createPedido(c.env, parsed.data);
       return c.json(created, 201);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar pedido' }, 500);
@@ -112,7 +112,7 @@ export const comprasRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      const updated = await comprasService.updatePedido(id, parsed.data);
+      const updated = await comprasService.updatePedido(c.env, id, parsed.data);
       if (!updated) return c.json({ error: 'Pedido não encontrado ou já recebido' }, 404);
       return c.json(updated);
     } catch (e) {
@@ -129,9 +129,9 @@ export const comprasRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      const result = await comprasService.receber(id, parsed.data.itens);
+      const result = await comprasService.receber(c.env, id, parsed.data.itens);
       if (!result.ok) return c.json({ error: result.error ?? 'Erro ao receber' }, 400);
-      const pedido = await comprasService.findById(id);
+      const pedido = await comprasService.findById(c.env, id);
       return c.json(pedido ?? { ok: true });
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao receber' }, 500);

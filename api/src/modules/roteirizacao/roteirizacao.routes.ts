@@ -36,13 +36,13 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
   .get('/veiculos', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
-    const list = await roteirizacaoService.listVeiculos();
+    const list = await roteirizacaoService.listVeiculos(c.env);
     return c.json(list);
   })
   .get('/veiculos/:id', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
-    const v = await roteirizacaoService.findVeiculoById(c.req.param('id'));
+    const v = await roteirizacaoService.findVeiculoById(c.env, c.req.param('id'));
     if (!v) return c.json({ error: 'Veículo não encontrado' }, 404);
     return c.json(v);
   })
@@ -52,7 +52,7 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
     const body = await c.req.json();
     const parsed = veiculoSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
-    const created = await roteirizacaoService.createVeiculo(parsed.data);
+    const created = await roteirizacaoService.createVeiculo(c.env, parsed.data);
     return c.json(created, 201);
   })
   .patch('/veiculos/:id', async (c) => {
@@ -61,7 +61,7 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
     const body = await c.req.json();
     const parsed = veiculoSchema.partial().safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
-    const updated = await roteirizacaoService.updateVeiculo(c.req.param('id'), parsed.data);
+    const updated = await roteirizacaoService.updateVeiculo(c.env, c.req.param('id'), parsed.data);
     if (!updated) return c.json({ error: 'Veículo não encontrado' }, 404);
     return c.json(updated);
   })
@@ -71,13 +71,13 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
     const veiculo_id = c.req.query('veiculo_id');
     const data = c.req.query('data');
     const status = c.req.query('status');
-    const list = await roteirizacaoService.listEntregas({ veiculo_id, data, status });
+    const list = await roteirizacaoService.listEntregas(c.env, { veiculo_id, data, status });
     return c.json(list);
   })
   .get('/entregas/pendentes', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
-    const list = await roteirizacaoService.listPedidosPendentesEntrega();
+    const list = await roteirizacaoService.listPedidosPendentesEntrega(c.env);
     return c.json(list);
   })
   .post('/entregas', async (c) => {
@@ -86,7 +86,7 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
     const body = await c.req.json();
     const parsed = entregaSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
-    const created = await roteirizacaoService.createEntrega(parsed.data);
+    const created = await roteirizacaoService.createEntrega(c.env, parsed.data);
     return c.json(created, 201);
   })
   .patch('/entregas/:id', async (c) => {
@@ -99,14 +99,14 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
       ordem_na_rota: z.number().nullable().optional(),
     }).safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
-    const updated = await roteirizacaoService.updateEntrega(c.req.param('id'), parsed.data);
+    const updated = await roteirizacaoService.updateEntrega(c.env, c.req.param('id'), parsed.data);
     if (!updated) return c.json({ error: 'Entrega não encontrada' }, 404);
     return c.json(updated);
   })
   .post('/entregas/:id/entregue', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
-    const updated = await roteirizacaoService.marcarEntregue(c.req.param('id'));
+    const updated = await roteirizacaoService.marcarEntregue(c.env, c.req.param('id'));
     if (!updated) return c.json({ error: 'Entrega não encontrada' }, 404);
     return c.json(updated);
   })
@@ -116,14 +116,14 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
     const body = await c.req.json();
     const parsed = z.object({ inoperante: z.literal(true), motivo: z.string().nullable().optional() }).safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
-    const result = await marcarVeiculoInoperante(c.req.param('id'), parsed.data.motivo ?? null);
+    const result = await marcarVeiculoInoperante(c.env, c.req.param('id'), parsed.data.motivo ?? null);
     if (!result.veiculo) return c.json({ error: 'Veículo não encontrado' }, 404);
     return c.json({ veiculo: result.veiculo, entregasAfetadas: result.entregasAfetadas });
   })
   .get('/entregas-afetadas-veiculo/:veiculoId', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
-    const list = await roteirizacaoService.listEntregasAfetadasPorVeiculoInoperante(c.req.param('veiculoId'));
+    const list = await roteirizacaoService.listEntregasAfetadasPorVeiculoInoperante(c.env, c.req.param('veiculoId'));
     return c.json(list);
   })
   .post('/reagendar-entregas', async (c) => {
@@ -137,6 +137,7 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
     }).safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     const count = await roteirizacaoService.reagendarEntregas(
+      c.env,
       parsed.data.entrega_ids,
       parsed.data.novo_veiculo_id ?? null,
       parsed.data.nova_data ?? null
@@ -152,7 +153,7 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
       data_entrega: z.string(),
     }).safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
-    const ids = await roteirizacaoService.sugerirOrdemRota(parsed.data.veiculo_id, parsed.data.data_entrega);
+    const ids = await roteirizacaoService.sugerirOrdemRota(c.env, parsed.data.veiculo_id, parsed.data.data_entrega);
     return c.json({ entrega_ids: ids });
   })
   .patch('/entregas/ordem', async (c) => {
@@ -161,6 +162,6 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
     const body = await c.req.json();
     const parsed = z.object({ entrega_ids_ordenados: z.array(z.string().uuid()) }).safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
-    await roteirizacaoService.aplicarOrdemRota(parsed.data.entrega_ids_ordenados);
+    await roteirizacaoService.aplicarOrdemRota(c.env, parsed.data.entrega_ids_ordenados);
     return c.json({ ok: true });
   });

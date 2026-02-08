@@ -31,7 +31,7 @@ export const financeiroRoutes = new Hono<Ctx>()
     const status = c.req.query('status');
     const data_inicio = c.req.query('data_inicio');
     const data_fim = c.req.query('data_fim');
-    const list = await financeiroService.listContasPagar({ status, data_inicio, data_fim });
+    const list = await financeiroService.listContasPagar(c.env, { status, data_inicio, data_fim });
     return c.json(list);
   })
   .post('/contas-a-pagar', async (c) => {
@@ -40,14 +40,14 @@ export const financeiroRoutes = new Hono<Ctx>()
     const body = await c.req.json();
     const parsed = contaPagarSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
-    const created = await financeiroService.createContaPagar(parsed.data);
+    const created = await financeiroService.createContaPagar(c.env, parsed.data);
     return c.json(created, 201);
   })
   .post('/contas-a-pagar/:id/pago', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
-    const updated = await financeiroService.marcarPago(id);
+    const updated = await financeiroService.marcarPago(c.env, id);
     if (!updated) return c.json({ error: 'Conta não encontrada ou já paga' }, 404);
     return c.json(updated);
   })
@@ -57,7 +57,7 @@ export const financeiroRoutes = new Hono<Ctx>()
     const status = c.req.query('status');
     const data_inicio = c.req.query('data_inicio');
     const data_fim = c.req.query('data_fim');
-    const list = await financeiroService.listContasReceber({ status, data_inicio, data_fim });
+    const list = await financeiroService.listContasReceber(c.env, { status, data_inicio, data_fim });
     return c.json(list);
   })
   .post('/contas-a-receber', async (c) => {
@@ -66,14 +66,14 @@ export const financeiroRoutes = new Hono<Ctx>()
     const body = await c.req.json();
     const parsed = contaReceberSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
-    const created = await financeiroService.createContaReceber(parsed.data);
+    const created = await financeiroService.createContaReceber(c.env, parsed.data);
     return c.json(created, 201);
   })
   .post('/contas-a-receber/:id/recebido', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
-    const updated = await financeiroService.marcarRecebido(id);
+    const updated = await financeiroService.marcarRecebido(c.env, id);
     if (!updated) return c.json({ error: 'Conta não encontrada ou já recebida' }, 404);
     return c.json(updated);
   })
@@ -82,6 +82,6 @@ export const financeiroRoutes = new Hono<Ctx>()
     if (auth instanceof Response) return auth;
     const data_inicio = c.req.query('data_inicio') ?? new Date().toISOString().slice(0, 7) + '-01';
     const data_fim = c.req.query('data_fim') ?? new Date().toISOString().slice(0, 10);
-    const resumo = await financeiroService.resumoFinanceiro({ data_inicio, data_fim });
+    const resumo = await financeiroService.resumoFinanceiro(c.env, { data_inicio, data_fim });
     return c.json(resumo);
   });

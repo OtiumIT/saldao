@@ -32,7 +32,7 @@ export const funcionariosRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const ativos = c.req.query('ativos');
-    const list = await funcionariosService.listFuncionarios(ativos === '1');
+    const list = await funcionariosService.listFuncionarios(c.env, ativos === '1');
     return c.json(list);
   })
   .get('/folha', async (c) => {
@@ -46,7 +46,7 @@ export const funcionariosRoutes = new Hono<Ctx>()
     if (Number.isNaN(anoN) || Number.isNaN(mesN) || mesN < 1 || mesN > 12) {
       return c.json({ error: 'ano/mes inválidos' }, 400);
     }
-    const folha = await funcionariosService.getFolhaPeriodo(anoN, mesN);
+    const folha = await funcionariosService.getFolhaPeriodo(c.env, anoN, mesN);
     return c.json(folha);
   })
   .post('/folha', async (c) => {
@@ -56,6 +56,7 @@ export const funcionariosRoutes = new Hono<Ctx>()
     const parsed = saveFolhaSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     const result = await funcionariosService.saveFolhaMes(
+      c.env,
       parsed.data.ano,
       parsed.data.mes,
       parsed.data.itens
@@ -66,7 +67,7 @@ export const funcionariosRoutes = new Hono<Ctx>()
   .get('/:id', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
-    const f = await funcionariosService.findFuncionarioById(c.req.param('id'));
+    const f = await funcionariosService.findFuncionarioById(c.env, c.req.param('id'));
     if (!f) return c.json({ error: 'Funcionário não encontrado' }, 404);
     return c.json(f);
   })
@@ -77,7 +78,7 @@ export const funcionariosRoutes = new Hono<Ctx>()
     const parsed = createFuncionarioSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     try {
-      const created = await funcionariosService.createFuncionario(parsed.data);
+      const created = await funcionariosService.createFuncionario(c.env, parsed.data);
       return c.json(created, 201);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar funcionário' }, 500);
@@ -89,14 +90,14 @@ export const funcionariosRoutes = new Hono<Ctx>()
     const body = await c.req.json();
     const parsed = updateFuncionarioSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
-    const updated = await funcionariosService.updateFuncionario(c.req.param('id'), parsed.data);
+    const updated = await funcionariosService.updateFuncionario(c.env, c.req.param('id'), parsed.data);
     if (!updated) return c.json({ error: 'Funcionário não encontrado' }, 404);
     return c.json(updated);
   })
   .delete('/:id', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
-    const ok = await funcionariosService.removeFuncionario(c.req.param('id'));
+    const ok = await funcionariosService.removeFuncionario(c.env, c.req.param('id'));
     if (!ok) return c.json({ error: 'Funcionário não encontrado' }, 404);
     return new Response(null, { status: 204 });
   });

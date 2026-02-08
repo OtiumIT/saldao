@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "a1a4b4587d284e078337c97e5229e81d"
+id = "ba75a8068c0f4b679b697a47fb44deeb"
 
 [vars]
 FIXED_AUTH = "true"
@@ -15,6 +15,8 @@ FRONTEND_URL = "https://gestao.saldaomoveisjerusalem.com.br"
 SEND_CONFIRMATION_EMAIL = "false"
 GMAIL_USER = ""
 CONTACT_EMAIL = ""
+SUPABASE_URL = "https://eoieosbjgwskiobsuplz.supabase.co"
+USE_SUPABASE_DATA_API = "true"
 
 # Secrets (definir via CLI: wrangler secret put <NOME>)
 # JWT_SECRET, FIXED_AUTH_PASSWORD, GMAIL_APP_PASSWORD, OPENAI_API_KEY

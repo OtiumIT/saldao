@@ -11,6 +11,7 @@ import { getEnv } from './config/env.worker.js';
 const nodeEnv: Env = {
   SUPABASE_URL: process.env.SUPABASE_URL ?? '',
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
+  USE_SUPABASE_DATA_API: process.env.USE_SUPABASE_DATA_API,
   FIXED_AUTH: process.env.FIXED_AUTH,
   FIXED_AUTH_EMAIL: process.env.FIXED_AUTH_EMAIL,
   FIXED_AUTH_PASSWORD: process.env.FIXED_AUTH_PASSWORD,

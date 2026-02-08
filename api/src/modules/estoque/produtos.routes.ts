@@ -51,7 +51,7 @@ export const produtosRoutes = new Hono<Ctx>()
           }
         : undefined;
     try {
-      const list = comSaldos ? await produtosService.listComSaldos(filtros) : await produtosService.list(filtros);
+      const list = comSaldos ? await produtosService.listComSaldos(c.env, filtros) : await produtosService.list(c.env, filtros);
       return c.json(list);
     } catch (e) {
       const error = e instanceof Error ? e : new Error('Erro desconhecido');
@@ -67,7 +67,7 @@ export const produtosRoutes = new Hono<Ctx>()
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
     try {
-      const sugestao = await produtosService.getSugestaoEstoque(id);
+      const sugestao = await produtosService.getSugestaoEstoque(c.env, id);
       return c.json(sugestao);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro' }, 500);
@@ -78,7 +78,7 @@ export const produtosRoutes = new Hono<Ctx>()
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
     try {
-      const saldos = await produtosService.getSaldosPorCor(id);
+      const saldos = await produtosService.getSaldosPorCor(c.env, id);
       return c.json(saldos);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro' }, 500);
@@ -88,7 +88,7 @@ export const produtosRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
-    const produto = await produtosService.findById(id);
+    const produto = await produtosService.findById(c.env, id);
     if (!produto) return c.json({ error: 'Produto não encontrado' }, 404);
     return c.json(produto);
   })
@@ -101,9 +101,9 @@ export const produtosRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      const existing = await produtosService.findByCodigo(parsed.data.codigo);
+      const existing = await produtosService.findByCodigo(c.env, parsed.data.codigo);
       if (existing) return c.json({ error: 'Código já existe' }, 400);
-      const created = await produtosService.create(parsed.data);
+      const created = await produtosService.create(c.env, parsed.data);
       return c.json(created, 201);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar produto' }, 500);
@@ -118,7 +118,7 @@ export const produtosRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      const result = await produtosService.createMany(parsed.data);
+      const result = await produtosService.createMany(c.env, parsed.data);
       return c.json(result);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao importar produtos' }, 500);
@@ -135,10 +135,10 @@ export const produtosRoutes = new Hono<Ctx>()
     }
     try {
       if (parsed.data.codigo) {
-        const existing = await produtosService.findByCodigo(parsed.data.codigo);
+        const existing = await produtosService.findByCodigo(c.env, parsed.data.codigo);
         if (existing && existing.id !== id) return c.json({ error: 'Código já existe' }, 400);
       }
-      const updated = await produtosService.update(id, parsed.data);
+      const updated = await produtosService.update(c.env, id, parsed.data);
       if (!updated) return c.json({ error: 'Produto não encontrado' }, 404);
       return c.json(updated);
     } catch (e) {
@@ -150,7 +150,7 @@ export const produtosRoutes = new Hono<Ctx>()
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
     try {
-      const ok = await produtosService.remove(id);
+      const ok = await produtosService.remove(c.env, id);
       if (!ok) return c.json({ error: 'Produto não encontrado' }, 404);
       return new Response(null, { status: 204 });
     } catch (e) {

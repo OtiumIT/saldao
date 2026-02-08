@@ -22,7 +22,7 @@ export const clientesRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     try {
-      const list = await clientesService.list();
+      const list = await clientesService.list(c.env);
       return c.json(list);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao listar clientes' }, 500);
@@ -31,7 +31,7 @@ export const clientesRoutes = new Hono<Ctx>()
   .get('/loja', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
-    const loja = await clientesService.findLoja();
+    const loja = await clientesService.findLoja(c.env);
     if (!loja) return c.json({ error: 'Cliente Loja não cadastrado' }, 404);
     return c.json(loja);
   })
@@ -39,7 +39,7 @@ export const clientesRoutes = new Hono<Ctx>()
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
-    const cliente = await clientesService.findById(id);
+    const cliente = await clientesService.findById(c.env, id);
     if (!cliente) return c.json({ error: 'Cliente não encontrado' }, 404);
     return c.json(cliente);
   })
@@ -52,7 +52,7 @@ export const clientesRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      const created = await clientesService.create(parsed.data);
+      const created = await clientesService.create(c.env, parsed.data);
       return c.json(created, 201);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar cliente' }, 500);
@@ -68,7 +68,7 @@ export const clientesRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      const updated = await clientesService.update(id, parsed.data);
+      const updated = await clientesService.update(c.env, id, parsed.data);
       if (!updated) return c.json({ error: 'Cliente não encontrado' }, 404);
       return c.json(updated);
     } catch (e) {
@@ -80,7 +80,7 @@ export const clientesRoutes = new Hono<Ctx>()
     if (auth instanceof Response) return auth;
     const id = c.req.param('id');
     try {
-      const ok = await clientesService.remove(id);
+      const ok = await clientesService.remove(c.env, id);
       if (!ok) return c.json({ error: 'Cliente não encontrado' }, 404);
       return new Response(null, { status: 204 });
     } catch (e) {
