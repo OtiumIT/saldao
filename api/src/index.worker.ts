@@ -3,7 +3,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { Pool } from 'pg';
 import type { Env } from './types/worker-env.js';
-import { setWorkerPool } from './db/client.js';
+import { setWorkerPool, getPool } from './db/client.js';
 
 import { healthRoutes } from './routes/health.routes.js';
 import { authRoutes } from './routes/auth.routes.js';
@@ -190,15 +190,25 @@ export default {
             // Configurações importantes para Workers
             statement_timeout: 20000, // 20 segundos (Workers tem limite de 30s CPU)
             query_timeout: 20000,
-            connectionTimeoutMillis: 5000,
+            connectionTimeoutMillis: 10000, // 10 segundos para Hyperdrive estabelecer conexão
             idleTimeoutMillis: 30000,
             // SSL necessário para Hyperdrive
             ssl: {
               rejectUnauthorized: false,
             },
+            // Configurações adicionais para melhorar estabilidade
+            allowExitOnIdle: true,
           });
           setWorkerPool(pool);
           poolInitialized = true;
+          
+          // Testa a conexão imediatamente para detectar problemas cedo
+          try {
+            await pool.query('SELECT 1');
+          } catch (testError) {
+            console.error('Initial connection test failed:', testError);
+            // Não falha aqui, deixa tentar na primeira query real
+          }
         } catch (poolError) {
           console.error('Error initializing database pool:', poolError);
           return jsonResponse({ 
@@ -206,6 +216,15 @@ export default {
             details: poolError instanceof Error ? poolError.message : 'Unknown error' 
           }, 500, origin);
         }
+      }
+      
+      // Verifica se o pool está disponível antes de processar
+      const pool = getPool();
+      if (!pool) {
+        return jsonResponse({ 
+          error: 'Database pool not initialized',
+          details: 'HYPERDRIVE binding may be missing or invalid'
+        }, 500, origin);
       }
       
       // Timeout wrapper para garantir que a requisição não trave

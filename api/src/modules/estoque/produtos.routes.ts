@@ -54,7 +54,12 @@ export const produtosRoutes = new Hono<Ctx>()
       const list = comSaldos ? await produtosService.listComSaldos(filtros) : await produtosService.list(filtros);
       return c.json(list);
     } catch (e) {
-      return c.json({ error: e instanceof Error ? e.message : 'Erro ao listar produtos' }, 500);
+      const error = e instanceof Error ? e : new Error('Erro desconhecido');
+      const message = error.message.includes('timeout') || error.message.includes('connect')
+        ? 'Timeout ao conectar com o banco de dados. Tente novamente.'
+        : error.message;
+      console.error('Error listing produtos:', error);
+      return c.json({ error: message }, 500);
     }
   })
   .get('/:id/sugestao-estoque', async (c) => {

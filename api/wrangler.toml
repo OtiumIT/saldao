@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "1a04132d459f442abd695ddd84f74336"
+id = "a1a4b4587d284e078337c97e5229e81d"
 
 [vars]
 FIXED_AUTH = "true"
