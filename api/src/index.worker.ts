@@ -187,6 +187,15 @@ export default {
           const pool = new Pool({
             connectionString: env.HYPERDRIVE.connectionString,
             max: 1,
+            // Configurações importantes para Workers
+            statement_timeout: 20000, // 20 segundos (Workers tem limite de 30s CPU)
+            query_timeout: 20000,
+            connectionTimeoutMillis: 5000,
+            idleTimeoutMillis: 30000,
+            // SSL necessário para Hyperdrive
+            ssl: {
+              rejectUnauthorized: false,
+            },
           });
           setWorkerPool(pool);
           poolInitialized = true;
@@ -199,8 +208,16 @@ export default {
         }
       }
       
-      // Chama o app Hono e garante que a resposta tenha CORS
-      const response = await app.fetch(request, env, ctx);
+      // Timeout wrapper para garantir que a requisição não trave
+      const timeoutPromise = new Promise<Response>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Request timeout after 25 seconds'));
+        }, 25000); // 25 segundos (antes do limite de 30s do Worker)
+      });
+      
+      // Chama o app Hono com timeout
+      const appPromise = app.fetch(request, env, ctx);
+      const response = await Promise.race([appPromise, timeoutPromise]);
       
       // Garante que sempre retornamos JSON com CORS, mesmo se o Hono retornar algo inesperado
       if (!response || response instanceof Response === false) {
