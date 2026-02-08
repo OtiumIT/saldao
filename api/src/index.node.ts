@@ -26,7 +26,7 @@ const nodeEnv: Env = {
 };
 
 const serverConfig = getEnv(nodeEnv);
-const PORT = Number(process.env.PORT) || 3055;
+const PORT = Number(process.env.PORT) || 3000;
 
 import { healthRoutes } from './routes/health.routes.js';
 import { authRoutes } from './routes/auth.routes.js';

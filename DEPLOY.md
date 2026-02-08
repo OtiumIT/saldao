@@ -1,14 +1,23 @@
 # Publicação do sistema de gestão (Cloudflare)
 
-Frontend na **Cloudflare Pages** e API na **Cloudflare Workers**, com PostgreSQL via **Hyperdrive**.
+Frontend na **Cloudflare Pages**. API pode ser em **Workers (com Hyperdrive)** ou em **Node** em outro host.
+
+## O que é Hyperdrive?
+
+**Hyperdrive** é um serviço da Cloudflare que permite ao **Worker** falar com PostgreSQL. Workers não têm acesso TCP direto; o Hyperdrive fica no meio e dá uma connection string “proxy” ao Worker. Sem ele, a API no Worker não consegue acessar o banco.
+
+- **Prós:** API e front na Cloudflare, um só lugar.  
+- **Contras:** mais configuração, pool/init podem dar 500 em rotas que usam banco, e erros às vezes saem sem CORS.
+
+**Alternativa mais simples:** rodar a API em **Node** (Railway, Render, Fly.io, etc.) com `DATABASE_URL` e o mesmo código que você usa local (`index.node.ts`). Aí não usa Workers nem Hyperdrive para a API; o front continua no Pages.
 
 ## Visão geral
 
 | Parte    | Onde              | Projeto / Nome   |
 |----------|-------------------|------------------|
 | Frontend | Cloudflare Pages  | `gestao`         |
-| API      | Cloudflare Workers| `gestao-api`     |
-| Banco    | Supabase (ou outro Postgres) | Acesso via Hyperdrive no Worker |
+| API      | Workers (Hyperdrive) **ou** Node em outro host | `gestao-api` ou serviço Node |
+| Banco    | Supabase (ou outro Postgres) | Direto com `DATABASE_URL` (Node) ou via Hyperdrive (Worker) |
 
 ## 1. Frontend (Cloudflare Pages)
 
@@ -133,6 +142,24 @@ Depois faça o deploy com:
 ```bash
 npx wrangler deploy --env production
 ```
+
+---
+
+## 2B. API em Node (sem Workers / sem Hyperdrive)
+
+Se preferir **não usar Workers nem Hyperdrive**, rode a API em um host Node (Railway, Render, Fly.io, etc.). O código já está pronto: use `index.node.ts` e `DATABASE_URL`.
+
+1. **Railway / Render / Fly.io:** crie um serviço Node, raiz ou pasta `api/`.
+2. **Build:** `npm install` (na pasta da API).
+3. **Start:** `npm run start` (que roda `node dist/index.js`) — ou use `npm run dev` com `tsx` em dev. Para produção, antes rode `npm run build` (tsc).
+4. **Variáveis de ambiente** no painel do serviço:
+   - `DATABASE_URL` = connection string do Supabase (pooler 6543).
+   - `CORS_ORIGIN` = `https://gestao.saldaomoveisjerusalem.com.br`
+   - `FRONTEND_URL` = idem
+   - `FIXED_AUTH`, `FIXED_AUTH_EMAIL`, `FIXED_AUTH_PASSWORD`, `JWT_SECRET` (e o que mais estiver em `api/ENV.md`).
+5. No **Cloudflare Pages** (frontend), defina `VITE_API_URL` = URL da API no Node (ex.: `https://gestao-api.railway.app` ou o domínio que o serviço der).
+
+Assim a API usa Postgres direto com `pg` e `DATABASE_URL`; nada de Hyperdrive nem Worker.
 
 ---
 

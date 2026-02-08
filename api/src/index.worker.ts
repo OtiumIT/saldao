@@ -31,65 +31,49 @@ type WorkerContext = {
 
 const ALLOWED_ORIGIN = 'https://gestao.saldaomoveisjerusalem.com.br';
 
-function corsHeaders(origin: string): HeadersInit {
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  };
-}
-
 const app = new Hono<WorkerContext>();
 
-// Garante CORS em toda resposta (Response.headers é read-only, criamos nova Response)
-app.use('*', async (c, next) => {
-  await next();
-  const origin = c.env.CORS_ORIGIN || ALLOWED_ORIGIN;
-  const res = c.res;
-  const headers = new Headers(res.headers);
-  headers.set('Access-Control-Allow-Origin', origin);
-  headers.set('Access-Control-Allow-Credentials', 'true');
-  headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
-});
-
 app.use('*', logger());
+
+// CORS configurado primeiro - valida origem da requisição
+app.use('*', cors({
+  origin: (origin, c) => {
+    const allowedOrigin = c.env.CORS_ORIGIN || ALLOWED_ORIGIN;
+    const allowedOrigins = [
+      allowedOrigin,
+      'http://localhost:5173',
+      'http://localhost:4055',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:4055',
+    ];
+    
+    if (!origin) {
+      // Se não há Origin header (ex: mesma origem ou requisição direta), retorna a origem permitida
+      return allowedOrigin;
+    }
+    
+    // Verifica se a origem está na lista permitida
+    if (allowedOrigins.includes(origin)) {
+      return origin;
+    }
+    
+    // Retorna a origem permitida como fallback
+    return allowedOrigin;
+  },
+  credentials: true,
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+  exposeHeaders: ['Content-Type'],
+  maxAge: 86400,
+}));
+
+// secureHeaders aplicado após CORS para não interferir nos headers CORS
 app.use('*', secureHeaders({
   xFrameOptions: 'DENY',
   xContentTypeOptions: 'nosniff',
   referrerPolicy: 'strict-origin-when-cross-origin',
+  // Não definir contentSecurityPolicy aqui para evitar conflitos com CORS
 }));
-
-app.use('*', async (c, next) => {
-  if (c.req.method === 'OPTIONS') {
-    const origin = c.env.CORS_ORIGIN || ALLOWED_ORIGIN;
-    return new Response(null, {
-      status: 204,
-      headers: {
-        ...corsHeaders(origin),
-        'Access-Control-Max-Age': '86400',
-      },
-    });
-  }
-  try {
-    const env = getEnv(c.env);
-    return cors({
-      origin: env.server.corsOrigin,
-      credentials: true,
-      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'Authorization'],
-    })(c, next);
-  } catch {
-    return cors({
-      origin: ALLOWED_ORIGIN,
-      credentials: true,
-      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'Authorization'],
-    })(c, next);
-  }
-});
 
 app.route('/health', healthRoutes);
 app.route('/api/auth', authRoutes);
@@ -119,42 +103,29 @@ app.get('/', (c) => {
 });
 
 app.onError((err, c) => {
-  const origin = c.env.CORS_ORIGIN || ALLOWED_ORIGIN;
+  const allowedOrigin = c.env.CORS_ORIGIN || ALLOWED_ORIGIN;
+  const requestOrigin = c.req.header('Origin');
+  const origin = requestOrigin && (
+    requestOrigin === allowedOrigin ||
+    requestOrigin === 'http://localhost:5173' ||
+    requestOrigin === 'http://localhost:4055'
+  ) ? requestOrigin : allowedOrigin;
+  
   const res = c.json({ error: err.message || 'Internal Server Error' }, 500);
-  const headers = new Headers(res.headers);
-  Object.entries(corsHeaders(origin)).forEach(([k, v]) => headers.set(k, v));
-  return new Response(res.body, { status: res.status, headers });
-});
-
-let poolInitialized = false;
-
-function corsErrorResponse(origin: string, message: string, status = 500): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': origin,
-      'Access-Control-Allow-Credentials': 'true',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  });
-}
-
-/** Garante CORS em qualquer Response antes de enviar ao cliente (última linha de defesa). */
-function withCors(res: Response, origin: string): Response {
   const headers = new Headers(res.headers);
   headers.set('Access-Control-Allow-Origin', origin);
   headers.set('Access-Control-Allow-Credentials', 'true');
   headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
-}
+  return new Response(res.body, { status: res.status, headers });
+});
+
+let poolInitialized = false;
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const origin = env.CORS_ORIGIN || ALLOWED_ORIGIN;
     try {
+      // Inicializa pool do Hyperdrive se necessário
       if (env.HYPERDRIVE?.connectionString && !poolInitialized) {
         const pool = new Pool({
           connectionString: env.HYPERDRIVE.connectionString,
@@ -163,14 +134,30 @@ export default {
         setWorkerPool(pool);
         poolInitialized = true;
       }
-      const res = await app.fetch(request, env, ctx).catch((err) => {
-        const message = err instanceof Error ? err.message : 'Internal Server Error';
-        return corsErrorResponse(origin, message);
-      });
-      return withCors(res, origin);
+      
+      // Deixa o Hono lidar com tudo, incluindo CORS
+      return await app.fetch(request, env, ctx);
     } catch (err) {
+      // Fallback de erro com CORS garantido
+      const allowedOrigin = env.CORS_ORIGIN || ALLOWED_ORIGIN;
+      const requestOrigin = request.headers.get('Origin');
+      const origin = requestOrigin && (
+        requestOrigin === allowedOrigin ||
+        requestOrigin === 'http://localhost:5173' ||
+        requestOrigin === 'http://localhost:4055'
+      ) ? requestOrigin : allowedOrigin;
+      
       const message = err instanceof Error ? err.message : 'Internal Server Error';
-      return corsErrorResponse(origin, message);
+      return new Response(JSON.stringify({ error: message }), {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Credentials': 'true',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+      });
     }
   },
 };
