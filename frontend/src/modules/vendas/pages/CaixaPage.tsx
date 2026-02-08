@@ -55,6 +55,7 @@ export function CaixaPage() {
   const [valor_frete_manual, setValorFreteManual] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [previsao_entrega_em_dias, setPrevisaoEntregaEmDias] = useState('');
+  const [descontoValor, setDescontoValor] = useState('');
   const [showClienteEntrega, setShowClienteEntrega] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -119,6 +120,9 @@ export function CaixaPage() {
   };
 
   const subtotal = cart.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0);
+  const descontoNum = descontoValor.trim() ? parseFloat(descontoValor.replace(',', '.')) : 0;
+  const desconto = !Number.isNaN(descontoNum) && descontoNum > 0 ? Math.min(descontoNum, subtotal) : 0;
+  const subtotalComDesconto = subtotal - desconto;
   const kmNum = distancia_km.trim() ? parseFloat(distancia_km) : NaN;
   const freteTabela = !Number.isNaN(kmNum) && kmNum > 0 ? calcularFretePorKm(kmNum) : null;
   const acimaDe13 = !Number.isNaN(kmNum) && kmNum > 13;
@@ -129,7 +133,7 @@ export function CaixaPage() {
       : acimaDe13
         ? (Number.isNaN(freteManualNum) ? 0 : Math.max(0, freteManualNum))
         : (freteTabela ?? 0);
-  const totalGeral = subtotal + valorFrete;
+  const totalGeral = Math.max(0, subtotalComDesconto + valorFrete);
 
   const validCart = cart.filter((i) => i.quantidade > 0);
   const itensSemEstoque = validCart.filter((i) => getSaldo(i.produto_id) < i.quantidade);
@@ -159,19 +163,38 @@ export function CaixaPage() {
     setError('');
     setLoading(true);
     try {
+      const obsFinal = [
+        observacoes.trim(),
+        desconto > 0 ? `Desconto R$ ${desconto.toFixed(2)} aplicado` : '',
+      ].filter(Boolean).join(' · ') || null;
+
+      const itensParaEnvio =
+        desconto > 0 && subtotal > 0
+          ? validCart.map((i) => {
+              const totalItem = i.quantidade * i.preco_unitario;
+              const fator = (subtotal - desconto) / subtotal;
+              const novoPrecoUnitario = (totalItem * fator) / i.quantidade;
+              return {
+                produto_id: i.produto_id,
+                quantidade: i.quantidade,
+                preco_unitario: Math.round(novoPrecoUnitario * 100) / 100,
+              };
+            })
+          : validCart.map((i) => ({
+              produto_id: i.produto_id,
+              quantidade: i.quantidade,
+              preco_unitario: i.preco_unitario,
+            }));
+
       const payload: CreatePedidoVendaRequest = {
         cliente_id: cliente_id || null,
         tipo_entrega,
         endereco_entrega: tipo_entrega === 'entrega' ? endereco_entrega.trim() : null,
-        observacoes: observacoes.trim() || null,
+        observacoes: obsFinal,
         previsao_entrega_em_dias: soFabricadosSemEstoque && previsaoNum >= 1 ? previsaoNum : null,
         distancia_km: tipo_entrega === 'entrega' && !Number.isNaN(kmNum) ? kmNum : null,
         valor_frete: tipo_entrega === 'entrega' ? valorFrete : null,
-        itens: validCart.map((i) => ({
-          produto_id: i.produto_id,
-          quantidade: i.quantidade,
-          preco_unitario: i.preco_unitario,
-        })),
+        itens: itensParaEnvio,
       };
       const created = await vendasService.createPedidoVenda(payload, token);
       try {
@@ -194,6 +217,7 @@ export function CaixaPage() {
       setValorFreteManual('');
       setObservacoes('');
       setPrevisaoEntregaEmDias('');
+      setDescontoValor('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao finalizar venda');
     } finally {
@@ -232,32 +256,30 @@ export function CaixaPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0f0f0f]">
-      {/* Barra superior tipo terminal */}
-      <header className="flex items-center justify-between px-4 py-3 bg-[#0a0a0a] border-b border-white/10 shrink-0">
+    <div className="min-h-screen flex flex-col bg-slate-50">
+      <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shrink-0 shadow-sm">
         <div className="flex items-center gap-4">
           <Link
             to="/vendas"
-            className="text-white/70 hover:text-white text-sm font-medium flex items-center gap-1"
+            className="text-slate-600 hover:text-slate-900 text-sm font-medium flex items-center gap-1"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             Vendas
           </Link>
-          <span className="text-white/50 text-sm">|</span>
-          <h1 className="text-lg font-semibold text-white">Caixa</h1>
+          <span className="text-slate-400 text-sm">|</span>
+          <h1 className="text-lg font-semibold text-slate-900">Caixa</h1>
         </div>
-        <span className="text-white/40 text-sm tabular-nums">
+        <span className="text-slate-500 text-sm tabular-nums">
           {new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
         </span>
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
-        {/* Área de busca e produtos */}
-        <section className="flex-1 flex flex-col p-4 lg:p-6 overflow-hidden">
+        <section className="flex-1 flex flex-col p-4 lg:p-6 overflow-hidden bg-slate-50">
           <div className="space-y-3">
-            <label className="block text-sm font-medium text-white/80">Buscar produto (código ou nome)</label>
+            <label className="block text-sm font-medium text-slate-700">Buscar produto (código ou nome)</label>
             <div>
               <Combobox
                 value={search}
@@ -268,11 +290,11 @@ export function CaixaPage() {
                 maxOptions={14}
                 placeholder="Digite para buscar · ↑↓ navegar · Enter selecionar"
                 aria-label="Buscar produto por código ou descrição"
-                inputClassName="w-full h-14 px-5 text-lg bg-[#1a1a1a] border border-white/20 rounded-xl text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
+                inputClassName="w-full h-14 px-5 text-lg bg-white border border-slate-300 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
               />
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-white/60 text-sm">Quantidade ao adicionar:</span>
+              <span className="text-slate-600 text-sm">Quantidade ao adicionar:</span>
               {[1, 2, 5, 10].map((n) => (
                 <button
                   key={n}
@@ -280,8 +302,8 @@ export function CaixaPage() {
                   onClick={() => setQuantityToAdd(n)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     quantityToAdd === n
-                      ? 'bg-amber-500 text-black'
-                      : 'bg-white/10 text-white hover:bg-white/20'
+                      ? 'bg-amber-500 text-slate-900'
+                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
                   }`}
                 >
                   {n}
@@ -291,47 +313,46 @@ export function CaixaPage() {
           </div>
         </section>
 
-        {/* Carrinho e total */}
-        <aside className="w-full lg:w-[420px] lg:min-w-[420px] flex flex-col bg-[#161616] border-t lg:border-t-0 lg:border-l border-white/10">
+        <aside className="w-full lg:w-[440px] lg:min-w-[440px] flex flex-col bg-white border-t lg:border-t-0 lg:border-l border-slate-200 shadow-lg">
           <div className="p-4 flex-1 flex flex-col min-h-0">
-            <h2 className="text-white font-semibold mb-3">Itens ({validCart.length})</h2>
+            <h2 className="text-slate-900 font-semibold mb-3">Itens ({validCart.length})</h2>
             <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
               {validCart.length === 0 ? (
-                <p className="text-white/50 text-sm">Nenhum item. Busque e adicione produtos acima.</p>
+                <p className="text-slate-500 text-sm">Nenhum item. Busque e adicione produtos acima.</p>
               ) : (
                 validCart.map((item, idx) => (
                   <div
                     key={`${item.produto_id}-${idx}`}
-                    className="flex items-center gap-2 p-3 rounded-xl bg-white/5 border border-white/10"
+                    className="flex items-start gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-white font-medium truncate">{item.descricao}</p>
-                      <p className="text-white/50 text-sm">{item.codigo}</p>
+                      <p className="text-slate-900 font-medium text-sm break-words leading-snug">{item.descricao}</p>
+                      <p className="text-slate-500 text-xs mt-0.5">{item.codigo}</p>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
                         onClick={() => updateCartItemQty(idx, -1)}
-                        className="w-9 h-9 rounded-lg bg-white/10 text-white hover:bg-white/20 font-bold"
+                        className="w-9 h-9 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold"
                       >
                         −
                       </button>
-                      <span className="w-10 text-center text-white font-semibold tabular-nums">{item.quantidade}</span>
+                      <span className="w-10 text-center text-slate-900 font-semibold tabular-nums text-sm">{item.quantidade}</span>
                       <button
                         type="button"
                         onClick={() => updateCartItemQty(idx, 1)}
-                        className="w-9 h-9 rounded-lg bg-white/10 text-white hover:bg-white/20 font-bold"
+                        className="w-9 h-9 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold"
                       >
                         +
                       </button>
                     </div>
-                    <span className="text-amber-400 font-semibold tabular-nums w-20 text-right">
+                    <span className="text-amber-700 font-semibold tabular-nums text-sm w-20 text-right shrink-0">
                       R$ {(item.quantidade * item.preco_unitario).toFixed(2)}
                     </span>
                     <button
                       type="button"
                       onClick={() => removeFromCart(idx)}
-                      className="text-white/50 hover:text-red-400 p-1"
+                      className="text-slate-400 hover:text-red-600 p-1 shrink-0"
                       aria-label="Remover"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -343,23 +364,22 @@ export function CaixaPage() {
               )}
             </div>
 
-            {/* Cliente e entrega (expansível) */}
-            <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="mt-4 pt-4 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => setShowClienteEntrega((v) => !v)}
-                className="text-white/80 hover:text-white text-sm font-medium flex items-center gap-2"
+                className="text-slate-600 hover:text-slate-900 text-sm font-medium flex items-center gap-2"
               >
                 {showClienteEntrega ? '▼' : '▶'} Cliente e entrega
               </button>
               {showClienteEntrega && (
                 <div className="mt-3 space-y-3">
                   <div>
-                    <label className="block text-xs text-white/60 mb-1">Cliente (opcional)</label>
+                    <label className="block text-xs text-slate-500 mb-1">Cliente (opcional)</label>
                     <select
                       value={cliente_id}
                       onChange={(e) => setClienteId(e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg bg-[#1a1a1a] border border-white/20 text-white text-sm"
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm"
                     >
                       <option value="">— Nenhum —</option>
                       {clientes.map((c) => (
@@ -368,7 +388,7 @@ export function CaixaPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-white/60 mb-1">Tipo</label>
+                    <label className="block text-xs text-slate-500 mb-1">Tipo</label>
                     <div className="flex gap-2">
                       {TIPO_ENTREGA_OPTIONS.map((o) => (
                         <button
@@ -376,7 +396,7 @@ export function CaixaPage() {
                           type="button"
                           onClick={() => setTipoEntrega(o.value)}
                           className={`flex-1 py-2 rounded-lg text-sm font-medium ${
-                            tipo_entrega === o.value ? 'bg-amber-500 text-black' : 'bg-white/10 text-white'
+                            tipo_entrega === o.value ? 'bg-amber-500 text-slate-900' : 'bg-slate-100 text-slate-700 border border-slate-300'
                           }`}
                         >
                           {o.label}
@@ -391,8 +411,6 @@ export function CaixaPage() {
                         value={endereco_entrega}
                         onChange={(e) => setEnderecoEntrega(e.target.value)}
                         placeholder="Logradouro, número, bairro..."
-                        className="bg-[#1a1a1a] border-white/20 text-white"
-                        variant="dark"
                       />
                       <div className="grid grid-cols-2 gap-2">
                         <Input
@@ -403,7 +421,6 @@ export function CaixaPage() {
                           value={distancia_km}
                           onChange={(e) => setDistanciaKm(e.target.value)}
                           placeholder="Ex: 5"
-                          variant="dark"
                         />
                         {acimaDe13 && (
                           <Input
@@ -413,12 +430,11 @@ export function CaixaPage() {
                             step={0.01}
                             value={valor_frete_manual}
                             onChange={(e) => setValorFreteManual(e.target.value)}
-                            variant="dark"
                           />
                         )}
                       </div>
                       {!Number.isNaN(kmNum) && kmNum > 0 && freteTabela !== null && kmNum <= 13 && (
-                        <p className="text-amber-400 text-sm">Frete: R$ {freteTabela.toFixed(2)}</p>
+                        <p className="text-amber-700 text-sm">Frete: R$ {freteTabela.toFixed(2)}</p>
                       )}
                     </>
                   )}
@@ -427,18 +443,17 @@ export function CaixaPage() {
                     value={observacoes}
                     onChange={(e) => setObservacoes(e.target.value)}
                     placeholder="Opcional"
-                    variant="dark"
                   />
                   {soFabricadosSemEstoque && (
-                    <div className="p-3 rounded-lg bg-amber-500/20 border border-amber-500/40">
-                      <label className="block text-amber-200 text-sm mb-1">Previsão de entrega (dias)</label>
+                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+                      <label className="block text-amber-800 text-sm mb-1">Previsão de entrega (dias)</label>
                       <input
                         type="number"
                         min={1}
                         value={previsao_entrega_em_dias}
                         onChange={(e) => setPrevisaoEntregaEmDias(e.target.value)}
                         placeholder="Ex: 7"
-                        className="w-full h-10 px-3 rounded bg-[#1a1a1a] border border-white/20 text-white"
+                        className="w-full h-10 px-3 rounded border border-slate-300 bg-white text-slate-900"
                       />
                     </div>
                   )}
@@ -446,30 +461,46 @@ export function CaixaPage() {
               )}
             </div>
 
-            {/* Totais e finalizar */}
-            <div className="mt-4 pt-4 border-t border-white/10 space-y-2">
-              <div className="flex justify-between text-white/70 text-sm">
+            <div className="mt-4 pt-4 border-t border-slate-200 space-y-2">
+              <div className="flex justify-between text-slate-600 text-sm">
                 <span>Subtotal</span>
                 <span className="tabular-nums">R$ {subtotal.toFixed(2)}</span>
               </div>
+              {desconto > 0 && (
+                <div className="flex justify-between text-emerald-700 text-sm">
+                  <span>Desconto</span>
+                  <span className="tabular-nums">− R$ {desconto.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <label className="text-slate-600 text-sm">Aplicar desconto (R$)</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={descontoValor}
+                  onChange={(e) => setDescontoValor(e.target.value.replace(/[^0-9,.]/g, ''))}
+                  placeholder="0,00"
+                  className="w-24 h-9 px-2 rounded border border-slate-300 text-slate-900 text-sm"
+                />
+              </div>
               {tipo_entrega === 'entrega' && valorFrete > 0 && (
-                <div className="flex justify-between text-white/70 text-sm">
+                <div className="flex justify-between text-slate-600 text-sm">
                   <span>Frete</span>
                   <span className="tabular-nums">R$ {valorFrete.toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-white font-bold text-lg">
+              <div className="flex justify-between text-slate-900 font-bold text-lg pt-1">
                 <span>Total</span>
-                <span className="tabular-nums text-amber-400">R$ {totalGeral.toFixed(2)}</span>
+                <span className="tabular-nums text-amber-700">R$ {totalGeral.toFixed(2)}</span>
               </div>
-              {error && <p className="text-red-400 text-sm">{error}</p>}
+              {error && <p className="text-red-600 text-sm">{error}</p>}
               {itensSemEstoqueNaoFabricados.length > 0 && (
-                <p className="text-amber-400 text-sm">Ajuste quantidades: apenas fabricados podem vender sem estoque.</p>
+                <p className="text-amber-700 text-sm">Ajuste quantidades: apenas fabricados podem vender sem estoque.</p>
               )}
               <Button
                 onClick={handleFinalize}
                 disabled={!canFinalize || loading}
-                className="w-full h-14 text-lg font-bold mt-2 bg-amber-500 hover:bg-amber-400 text-black"
+                className="w-full h-14 text-lg font-bold mt-2 bg-amber-500 hover:bg-amber-400 text-slate-900"
               >
                 {loading ? 'Finalizando...' : 'Finalizar venda'}
               </Button>
