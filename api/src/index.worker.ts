@@ -128,6 +128,19 @@ app.onError((err, c) => {
 
 let poolInitialized = false;
 
+function corsErrorResponse(origin: string, message: string, status = 500): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const origin = env.CORS_ORIGIN || ALLOWED_ORIGIN;
@@ -140,22 +153,14 @@ export default {
         setWorkerPool(pool);
         poolInitialized = true;
       }
-      return await app.fetch(request, env, ctx);
+      const res = await app.fetch(request, env, ctx).catch((err) => {
+        const message = err instanceof Error ? err.message : 'Internal Server Error';
+        return corsErrorResponse(origin, message);
+      });
+      return res;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Internal Server Error';
-      return new Response(
-        JSON.stringify({ error: message }),
-        {
-          status: 500,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': origin,
-            'Access-Control-Allow-Credentials': 'true',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          },
-        }
-      );
+      return corsErrorResponse(origin, message);
     }
   },
 };
