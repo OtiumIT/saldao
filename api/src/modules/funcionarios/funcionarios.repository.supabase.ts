@@ -98,19 +98,8 @@ export async function listPagamentosPorPeriodo(
   mes: number
 ): Promise<PagamentoComFuncionario[]> {
   const client = getDataClient(env);
-  // Buscar pagamentos com JOIN usando select
-  const pagamentos = await db.select<PagamentoFuncionario & { valor_pago: string }>(
-    client,
-    'pagamentos_funcionarios',
-    {
-      filters: { ano, mes },
-      select: '*, funcionarios!inner(nome, salario, dia_pagamento)',
-      orderBy: { column: 'funcionarios.nome', ascending: true },
-    }
-  );
-
-  // Como o Supabase retorna o JOIN de forma aninhada, precisamos ajustar
-  // Vamos fazer duas queries separadas e combinar
+  
+  // Buscar pagamentos
   const pagamentosList = await db.select<PagamentoFuncionario & { valor_pago: string }>(
     client,
     'pagamentos_funcionarios',
@@ -120,17 +109,20 @@ export async function listPagamentosPorPeriodo(
   );
 
   const funcionariosIds = pagamentosList.map((p) => p.funcionario_id);
+  if (funcionariosIds.length === 0) return [];
+
   const funcionarios = await db.select<Funcionario & { salario: string }>(
     client,
     'funcionarios',
     {
-      filters: { id: funcionariosIds.length > 0 ? funcionariosIds : [] },
+      filters: { id: funcionariosIds },
+      orderBy: { column: 'nome', ascending: true },
     }
   );
 
   const funcionariosMap = new Map(funcionarios.map((f) => [f.id, f]));
 
-  return pagamentosList.map((p) => {
+  const result = pagamentosList.map((p) => {
     const f = funcionariosMap.get(p.funcionario_id);
     if (!f) {
       throw new Error(`Funcionário ${p.funcionario_id} não encontrado`);
@@ -143,6 +135,11 @@ export async function listPagamentosPorPeriodo(
       funcionario_dia_pagamento: f.dia_pagamento,
     };
   });
+
+  // Ordenar por nome do funcionário
+  result.sort((a, b) => a.funcionario_nome.localeCompare(b.funcionario_nome));
+
+  return result;
 }
 
 export async function getFolhaPeriodo(
