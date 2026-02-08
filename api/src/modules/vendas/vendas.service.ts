@@ -46,6 +46,12 @@ export const vendasService = {
     }
     return repo.marcarEntregue(id);
   },
+  cancelar: (env: Env, id: string) => {
+    if (useSupabaseDataAPI(env)) {
+      return repoSupabase.cancelar(env, id);
+    }
+    return repo.cancelar(id);
+  },
   getPrecoSugerido: (env: Env, produtoId: string) => {
     if (useSupabaseDataAPI(env)) {
       return repoSupabase.getPrecoSugerido(env, produtoId);

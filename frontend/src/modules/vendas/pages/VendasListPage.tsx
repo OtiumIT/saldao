@@ -12,7 +12,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export function VendasListPage() {
-  const { pedidos, loading, error, fetchPedidos, confirmar, marcarEntregue } = useVendas();
+  const { pedidos, loading, error, fetchPedidos, confirmar, marcarEntregue, cancelar } = useVendas();
 
   const handleConfirmar = async (p: PedidoVendaComCliente) => {
     if (!confirm('Confirmar pedido? Será dada baixa no estoque.')) return;
@@ -43,6 +43,15 @@ export function VendasListPage() {
       await marcarEntregue(p.id);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Erro');
+    }
+  };
+
+  const handleCancelar = async (p: PedidoVendaComCliente) => {
+    if (!confirm('Cancelar esta venda? Os itens serão devolvidos ao estoque e o pedido ficará como cancelado.')) return;
+    try {
+      await cancelar(p.id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Erro ao cancelar');
     }
   };
 
@@ -93,12 +102,15 @@ export function VendasListPage() {
               key: 'actions',
               label: 'Ações',
               render: (p) => (
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {p.status === 'rascunho' && (
                     <Button variant="secondary" size="sm" onClick={() => handleConfirmar(p)}>Confirmar</Button>
                   )}
                   {p.status === 'confirmado' && p.tipo_entrega === 'entrega' && (
                     <Button variant="secondary" size="sm" onClick={() => handleEntregue(p)}>Marcar entregue</Button>
+                  )}
+                  {(p.status === 'confirmado' || p.status === 'entregue') && (
+                    <Button variant="danger" size="sm" onClick={() => handleCancelar(p)}>Cancelar</Button>
                   )}
                 </div>
               ),

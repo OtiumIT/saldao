@@ -307,6 +307,33 @@ export async function confirmar(
   }
 }
 
+/** Cancelar pedido confirmado ou entregue: devolve os itens ao estoque e marca status cancelado. */
+export async function cancelar(env: Env, id: string): Promise<{ ok: boolean; error?: string }> {
+  const client = getDataClient(env);
+  const pedido = await db.findById<PedidoVenda>(client, 'pedidos_venda', id);
+  if (!pedido) return { ok: false, error: 'Pedido não encontrado' };
+  if (pedido.status !== 'confirmado' && pedido.status !== 'entregue') {
+    return { ok: false, error: 'Só é possível cancelar pedido confirmado ou entregue.' };
+  }
+  const itens = await listItens(env, id);
+  try {
+    for (const it of itens) {
+      await movimentacoesRepo.create(env, {
+        tipo: 'entrada',
+        produto_id: it.produto_id,
+        quantidade: it.quantidade,
+        origem_tipo: 'cancelamento_venda',
+        origem_id: id,
+        observacao: `Cancelamento venda ${id.slice(0, 8)}`,
+      });
+    }
+    await db.update<PedidoVenda>(client, 'pedidos_venda', id, { status: 'cancelado' } as any);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Erro ao cancelar' };
+  }
+}
+
 export async function marcarEntregue(env: Env, id: string): Promise<PedidoVenda | null> {
   const client = getDataClient(env);
   const pedido = await db.findById<PedidoVenda>(client, 'pedidos_venda', id);

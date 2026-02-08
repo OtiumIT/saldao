@@ -271,6 +271,37 @@ export async function confirmar(id: string, options?: { previsao_entrega_em_dias
   }
 }
 
+/** Cancelar pedido confirmado ou entregue: devolve os itens ao estoque (movimentações entrada) e marca status cancelado. */
+export async function cancelar(id: string): Promise<{ ok: boolean; error?: string }> {
+  const pool = getPool();
+  if (!pool) return { ok: false, error: 'DATABASE_URL não configurada' };
+  const pedido = await findById(id);
+  if (!pedido) return { ok: false, error: 'Pedido não encontrado' };
+  if (pedido.status !== 'confirmado' && pedido.status !== 'entregue') {
+    return { ok: false, error: 'Só é possível cancelar pedido confirmado ou entregue.' };
+  }
+  const itens = await listItens(id);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const it of itens) {
+      await client.query(
+        `INSERT INTO movimentacoes_estoque (data, tipo, produto_id, quantidade, origem_tipo, origem_id, observacao)
+         VALUES (CURRENT_DATE, 'entrada', $1, $2, 'cancelamento_venda', $3, $4)`,
+        [it.produto_id, it.quantidade, id, `Cancelamento venda ${id.slice(0, 8)}`]
+      );
+    }
+    await client.query('UPDATE pedidos_venda SET status = $2, updated_at = NOW() WHERE id = $1', [id, 'cancelado']);
+    await client.query('COMMIT');
+    return { ok: true };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    return { ok: false, error: e instanceof Error ? e.message : 'Erro ao cancelar' };
+  } finally {
+    client.release();
+  }
+}
+
 export async function marcarEntregue(id: string): Promise<PedidoVenda | null> {
   const pool = getPool();
   if (!pool) return null;

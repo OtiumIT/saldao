@@ -37,6 +37,10 @@ export async function marcarEntregue(id: string, token: string): Promise<PedidoV
   return apiClient.post<PedidoVendaComCliente>(`/api/vendas/${id}/entregue`, {}, token);
 }
 
+export async function cancelarPedidoVenda(id: string, token: string): Promise<PedidoVendaComCliente> {
+  return apiClient.post<PedidoVendaComCliente>(`/api/vendas/${id}/cancelar`, {}, token);
+}
+
 export interface SaleOrderExtraction {
   cliente_nome?: string | null;
   data_pedido?: string | null;

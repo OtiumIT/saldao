@@ -156,4 +156,17 @@ export const vendasRoutes = new Hono<Ctx>()
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro' }, 500);
     }
+  })
+  .post('/:id/cancelar', async (c) => {
+    const auth = await requireAuth(c);
+    if (auth instanceof Response) return auth;
+    const id = c.req.param('id');
+    try {
+      const result = await vendasService.cancelar(c.env, id);
+      if (!result.ok) return c.json({ error: result.error ?? 'Erro' }, 400);
+      const pedido = await vendasService.findById(c.env, id);
+      return c.json(pedido ?? { ok: true });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : 'Erro' }, 500);
+    }
   });

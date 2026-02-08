@@ -48,5 +48,12 @@ export function useVendas(params?: { status?: string; data_inicio?: string; data
     return updated;
   }, [token]);
 
-  return { pedidos, loading, error, fetchPedidos, createPedido, confirmar, marcarEntregue };
+  const cancelar = useCallback(async (id: string): Promise<PedidoVendaComCliente> => {
+    if (!token) throw new Error('Não autenticado');
+    const updated = await vendasService.cancelarPedidoVenda(id, token);
+    setPedidos((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    return updated;
+  }, [token]);
+
+  return { pedidos, loading, error, fetchPedidos, createPedido, confirmar, marcarEntregue, cancelar };
 }
