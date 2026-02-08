@@ -42,20 +42,17 @@ function corsHeaders(origin: string): HeadersInit {
 
 const app = new Hono<WorkerContext>();
 
-// Garante CORS em toda resposta (inclusive erros)
+// Garante CORS em toda resposta (Response.headers é read-only, criamos nova Response)
 app.use('*', async (c, next) => {
   await next();
   const origin = c.env.CORS_ORIGIN || ALLOWED_ORIGIN;
   const res = c.res;
-  res.headers.set('Access-Control-Allow-Origin', origin);
-  res.headers.set('Access-Control-Allow-Credentials', 'true');
-  if (!res.headers.has('Access-Control-Allow-Methods')) {
-    res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  }
-  if (!res.headers.has('Access-Control-Allow-Headers')) {
-    res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  }
-  return c.res;
+  const headers = new Headers(res.headers);
+  headers.set('Access-Control-Allow-Origin', origin);
+  headers.set('Access-Control-Allow-Credentials', 'true');
+  headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 });
 
 app.use('*', logger());
@@ -133,14 +130,32 @@ let poolInitialized = false;
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (env.HYPERDRIVE?.connectionString && !poolInitialized) {
-      const pool = new Pool({
-        connectionString: env.HYPERDRIVE.connectionString,
-        max: 1,
-      });
-      setWorkerPool(pool);
-      poolInitialized = true;
+    const origin = env.CORS_ORIGIN || ALLOWED_ORIGIN;
+    try {
+      if (env.HYPERDRIVE?.connectionString && !poolInitialized) {
+        const pool = new Pool({
+          connectionString: env.HYPERDRIVE.connectionString,
+          max: 1,
+        });
+        setWorkerPool(pool);
+        poolInitialized = true;
+      }
+      return await app.fetch(request, env, ctx);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Internal Server Error';
+      return new Response(
+        JSON.stringify({ error: message }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': origin,
+            'Access-Control-Allow-Credentials': 'true',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          },
+        }
+      );
     }
-    return app.fetch(request, env, ctx);
   },
 };
