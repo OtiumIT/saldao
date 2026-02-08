@@ -165,12 +165,12 @@ export async function update(id: string, data: {
           [id, it.produto_id, it.quantidade, it.preco_unitario, totalItem]
         );
       }
-      const total = totalItens + valorFrete;
+      const total = totalItens + (valorFrete ?? 0);
       await client.query('UPDATE pedidos_venda SET total = $2, updated_at = NOW() WHERE id = $1', [id, total]);
     } else {
       const { rows: sumRows } = await client.query<{ sum: string }>('SELECT COALESCE(SUM(total_item), 0) AS sum FROM itens_pedido_venda WHERE pedido_venda_id = $1', [id]);
       const totalItens = Number(sumRows[0]?.sum ?? 0);
-      await client.query('UPDATE pedidos_venda SET total = $2, updated_at = NOW() WHERE id = $1', [id, totalItens + valorFrete]);
+      await client.query('UPDATE pedidos_venda SET total = $2, updated_at = NOW() WHERE id = $1', [id, totalItens + (valorFrete ?? 0)]);
     }
     await client.query('COMMIT');
     const updated = await findById(id);

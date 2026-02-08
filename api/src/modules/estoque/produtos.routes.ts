@@ -45,7 +45,7 @@ export const produtosRoutes = new Hono<Ctx>()
     const filtros =
       tipo || categoria_id !== undefined || fornecedor_id
         ? {
-            tipo: tipo === 'revenda' || tipo === 'insumos' || tipo === 'fabricado' ? tipo : undefined,
+            tipo: (tipo === 'revenda' || tipo === 'insumos' || tipo === 'fabricado' ? tipo : undefined) as 'revenda' | 'insumos' | 'fabricado' | undefined,
             categoria_id: categoria_id === '' || categoria_id === 'null' ? null : categoria_id ?? undefined,
             fornecedor_id: fornecedor_id && fornecedor_id.trim() ? fornecedor_id.trim() : undefined,
           }

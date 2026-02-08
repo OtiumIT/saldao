@@ -156,16 +156,16 @@ async function getSaldoPorCor(
   corId: string | null
 ): Promise<number> {
   if (corId) {
-    const r = await pool.query<{ quantidade: string }>(
+    const r = await pool.query(
       'SELECT COALESCE(SUM(quantidade), 0)::text AS quantidade FROM saldo_estoque_por_cor WHERE produto_id = $1 AND cor_id = $2',
       [produtoId, corId]
-    );
+    ) as { rows: Array<{ quantidade: string }> };
     return Number(r.rows[0]?.quantidade ?? 0);
   }
-  const r = await pool.query<{ quantidade: string }>(
+  const r = await pool.query(
     'SELECT COALESCE(SUM(quantidade), 0)::text AS quantidade FROM movimentacoes_estoque WHERE produto_id = $1',
     [produtoId]
-  );
+  ) as { rows: Array<{ quantidade: string }> };
   return Number(r.rows[0]?.quantidade ?? 0);
 }
 
@@ -257,7 +257,7 @@ export async function conferirEstoquePorCor(params: {
       descricao: v.descricao,
       quantidade_necessaria: v.qtd,
     }));
-  } else if (params.produto_fabricado_id && params.quantidade != null) {
+  } else if (params.produto_fabricado_id && params.quantidade != null && params.quantidade > 0) {
     const bom = await listBomByFabricado(params.produto_fabricado_id);
     insumosPorCor = bom
       .filter((b) => b.controlar_por_cor)
@@ -265,7 +265,7 @@ export async function conferirEstoquePorCor(params: {
         produto_insumo_id: b.produto_insumo_id,
         codigo: b.insumo_codigo ?? '',
         descricao: b.insumo_descricao ?? '',
-        quantidade_necessaria: b.quantidade_por_unidade * params.quantidade,
+        quantidade_necessaria: b.quantidade_por_unidade * params.quantidade!,
       }));
   }
 
@@ -293,22 +293,22 @@ export async function conferirEstoquePorCor(params: {
 }
 
 async function listCoresComEstoqueParaInsumos(
-  pool: { query: (q: string, p: unknown[]) => Promise<{ rows: { cor_id: string; cor_nome: string }[] }> },
+  pool: { query: (q: string, p: unknown[]) => Promise<{ rows: unknown[] }> },
   insumos: Array<{ produto_id: string; quantidade_necessaria: number }>
 ): Promise<Array<{ cor_id: string; nome: string }>> {
   if (insumos.length === 0) {
-    const { rows } = await pool.query<{ id: string; nome: string }>('SELECT id, nome FROM cores ORDER BY nome', []);
+    const { rows } = await pool.query('SELECT id, nome FROM cores ORDER BY nome', []) as { rows: Array<{ id: string; nome: string }> };
     return rows.map((r) => ({ cor_id: r.id, nome: r.nome }));
   }
   const coresOk = new Map<string, string>();
-  const { rows: coresRows } = await pool.query<{ id: string; nome: string }>('SELECT id, nome FROM cores ORDER BY nome', []);
+  const { rows: coresRows } = await pool.query('SELECT id, nome FROM cores ORDER BY nome', []) as { rows: Array<{ id: string; nome: string }> };
   for (const cor of coresRows) {
     let ok = true;
     for (const ins of insumos) {
-      const r = await pool.query<{ quantidade: string }>(
+      const r = await pool.query(
         'SELECT COALESCE(SUM(quantidade), 0)::text AS quantidade FROM saldo_estoque_por_cor WHERE produto_id = $1 AND cor_id = $2',
         [ins.produto_id, cor.id]
-      );
+      ) as { rows: Array<{ quantidade: string }> };
       const saldo = Number(r.rows[0]?.quantidade ?? 0);
       if (saldo < ins.quantidade_necessaria) {
         ok = false;
@@ -321,8 +321,8 @@ async function listCoresComEstoqueParaInsumos(
 }
 
 export async function createOrdem(data: {
-  produto_fabricado_id: string;
-  quantidade: number;
+  produto_fabricado_id?: string;
+  quantidade?: number;
   data_ordem?: string;
   observacao?: string | null;
   cor_id?: string | null;

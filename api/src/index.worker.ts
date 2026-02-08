@@ -1,10 +1,8 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { secureHeaders } from 'hono/secure-headers';
 import { Pool } from 'pg';
 import type { Env } from './types/worker-env.js';
-import { getEnv } from './config/env.worker.js';
 import { setWorkerPool } from './db/client.js';
 
 import { healthRoutes } from './routes/health.routes.js';
@@ -67,13 +65,21 @@ app.use('*', cors({
   maxAge: 86400,
 }));
 
-// secureHeaders aplicado após CORS para não interferir nos headers CORS
-app.use('*', secureHeaders({
-  xFrameOptions: 'DENY',
-  xContentTypeOptions: 'nosniff',
-  referrerPolicy: 'strict-origin-when-cross-origin',
-  // Não definir contentSecurityPolicy aqui para evitar conflitos com CORS
-}));
+// secureHeaders aplicado após CORS - não interfere nos headers CORS do Hono
+// Mas vamos aplicar manualmente após garantir que CORS está presente
+app.use('*', async (c, next) => {
+  await next();
+  // Adiciona secure headers sem remover os headers CORS existentes
+  const headers = new Headers(c.res.headers);
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  return new Response(c.res.body, {
+    status: c.res.status,
+    statusText: c.res.statusText,
+    headers,
+  });
+});
 
 app.route('/health', healthRoutes);
 app.route('/api/auth', authRoutes);
@@ -122,42 +128,118 @@ app.onError((err, c) => {
 
 let poolInitialized = false;
 
+// Helper para criar resposta JSON com CORS
+function jsonResponse(data: any, status = 200, origin: string): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
+}
+
+// Helper para obter origem permitida
+function getAllowedOrigin(request: Request, env: Env): string {
+  const allowedOrigin = env.CORS_ORIGIN || ALLOWED_ORIGIN;
+  const requestOrigin = request.headers.get('Origin');
+  
+  if (!requestOrigin) {
+    return allowedOrigin;
+  }
+  
+  const allowedOrigins = [
+    allowedOrigin,
+    'http://localhost:5173',
+    'http://localhost:4055',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:4055',
+  ];
+  
+  return allowedOrigins.includes(requestOrigin) ? requestOrigin : allowedOrigin;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    try {
-      // Inicializa pool do Hyperdrive se necessário
-      if (env.HYPERDRIVE?.connectionString && !poolInitialized) {
-        const pool = new Pool({
-          connectionString: env.HYPERDRIVE.connectionString,
-          max: 1,
-        });
-        setWorkerPool(pool);
-        poolInitialized = true;
-      }
-      
-      // Deixa o Hono lidar com tudo, incluindo CORS
-      return await app.fetch(request, env, ctx);
-    } catch (err) {
-      // Fallback de erro com CORS garantido
-      const allowedOrigin = env.CORS_ORIGIN || ALLOWED_ORIGIN;
-      const requestOrigin = request.headers.get('Origin');
-      const origin = requestOrigin && (
-        requestOrigin === allowedOrigin ||
-        requestOrigin === 'http://localhost:5173' ||
-        requestOrigin === 'http://localhost:4055'
-      ) ? requestOrigin : allowedOrigin;
-      
-      const message = err instanceof Error ? err.message : 'Internal Server Error';
-      return new Response(JSON.stringify({ error: message }), {
-        status: 500,
+    const origin = getAllowedOrigin(request, env);
+    
+    // Trata OPTIONS preflight diretamente aqui para garantir CORS
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
         headers: {
-          'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': origin,
           'Access-Control-Allow-Credentials': 'true',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Max-Age': '86400',
         },
       });
+    }
+    
+    try {
+      // Inicializa pool do Hyperdrive se necessário
+      if (env.HYPERDRIVE?.connectionString && !poolInitialized) {
+        try {
+          const pool = new Pool({
+            connectionString: env.HYPERDRIVE.connectionString,
+            max: 1,
+          });
+          setWorkerPool(pool);
+          poolInitialized = true;
+        } catch (poolError) {
+          console.error('Error initializing database pool:', poolError);
+          return jsonResponse({ 
+            error: 'Database connection error', 
+            details: poolError instanceof Error ? poolError.message : 'Unknown error' 
+          }, 500, origin);
+        }
+      }
+      
+      // Chama o app Hono e garante que a resposta tenha CORS
+      const response = await app.fetch(request, env, ctx);
+      
+      // Garante que sempre retornamos JSON com CORS, mesmo se o Hono retornar algo inesperado
+      if (!response || response instanceof Response === false) {
+        return jsonResponse({ error: 'Invalid response from server' }, 500, origin);
+      }
+      
+      // Se a resposta já tem headers CORS, retorna como está
+      const corsHeader = response.headers.get('Access-Control-Allow-Origin');
+      if (corsHeader) {
+        return response;
+      }
+      
+      // Se não tem CORS, adiciona
+      const headers = new Headers(response.headers);
+      headers.set('Access-Control-Allow-Origin', origin);
+      headers.set('Access-Control-Allow-Credentials', 'true');
+      headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      
+      // Garante Content-Type JSON se não estiver definido
+      if (!headers.get('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+      }
+      
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    } catch (err) {
+      // Qualquer erro deve retornar JSON com CORS, nunca HTML
+      console.error('Worker error:', err);
+      const message = err instanceof Error ? err.message : 'Internal Server Error';
+      const details = err instanceof Error && err.stack ? err.stack.split('\n')[0] : undefined;
+      
+      return jsonResponse({ 
+        error: message,
+        ...(details && { details }),
+      }, 500, origin);
     }
   },
 };
