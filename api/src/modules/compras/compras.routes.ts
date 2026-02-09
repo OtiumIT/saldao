@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Env } from '../../types/worker-env.js';
 import { requireAuth } from '../../lib/auth-helper.worker.js';
 import { getEnv } from '../../config/env.worker.js';
-import { extractPurchaseOrderFromImage } from '../../lib/openai-helper.js';
+import { extractPurchaseOrderFromImage, extractPurchaseOrderFromAudio } from '../../lib/openai-helper.js';
 import { comprasService } from './compras.service.js';
 
 type Ctx = { Bindings: Env };
@@ -39,8 +39,24 @@ const receberSchema = z.object({
 });
 
 const extractFromImageSchema = z.object({ imageBase64: z.string().min(1) });
+const extractFromAudioSchema = z.object({ audioBase64: z.string().min(1) });
 
 export const comprasRoutes = new Hono<Ctx>()
+  .post('/extract-from-audio', async (c) => {
+    const auth = await requireAuth(c);
+    if (auth instanceof Response) return auth;
+    const body = await c.req.json();
+    const parsed = extractFromAudioSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
+    const envConfig = getEnv(c.env);
+    if (!envConfig.openai.apiKey) return c.json({ error: 'Extração por áudio não configurada (OPENAI_API_KEY)' }, 503);
+    try {
+      const extracted = await extractPurchaseOrderFromAudio(parsed.data.audioBase64, envConfig);
+      return c.json(extracted);
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : 'Erro ao extrair dados do áudio' }, 400);
+    }
+  })
   .post('/extract-from-image', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;

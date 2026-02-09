@@ -366,6 +366,62 @@ export async function extractSaleOrderFromImage(imageBase64: string, envConfig: 
 
 export async function extractPurchaseOrderFromImage(imageBase64: string, envConfig: EnvConfig): Promise<PurchaseOrderExtraction> {
   const raw = await extractOrderFromImage(imageBase64, envConfig, PURCHASE_ORDER_SYSTEM_PROMPT);
+  return normalizePurchaseOrderExtraction(raw);
+}
+
+// --- Extração por áudio (Whisper + GPT) ---
+const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25MB (limite Whisper)
+const AUDIO_MIME_EXT: Record<string, string> = {
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/m4a': 'm4a',
+  'audio/wav': 'wav',
+  'audio/webm': 'webm',
+  'audio/ogg': 'ogg',
+};
+
+function validateAndDecodeAudioBase64(
+  audioBase64: string
+): { valid: boolean; error?: string; file?: File } {
+  if (!audioBase64 || typeof audioBase64 !== 'string') {
+    return { valid: false, error: 'Áudio inválido' };
+  }
+  const dataUrlMatch = audioBase64.match(/^data:(audio\/[a-z0-9+.]+);base64,(.+)$/);
+  const mime = dataUrlMatch ? dataUrlMatch[1].toLowerCase() : 'audio/webm';
+  const base64Data = dataUrlMatch ? dataUrlMatch[2] : audioBase64.replace(/^data:.*?;base64,/, '');
+  if (!/^[A-Za-z0-9+/=]+$/.test(base64Data)) {
+    return { valid: false, error: 'Formato base64 inválido' };
+  }
+  const sizeInBytes = Math.ceil((base64Data.length * 3) / 4);
+  if (sizeInBytes < 1024) return { valid: false, error: 'Áudio muito curto' };
+  if (sizeInBytes > MAX_AUDIO_SIZE) return { valid: false, error: 'Áudio muito grande (máx. 25MB)' };
+  const ext = AUDIO_MIME_EXT[mime] || 'webm';
+  try {
+    const binary = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+    const blob = new Blob([binary], { type: mime });
+    const file = new File([blob], `audio.${ext}`, { type: mime });
+    return { valid: true, file };
+  } catch {
+    return { valid: false, error: 'Falha ao decodificar áudio' };
+  }
+}
+
+const PURCHASE_ORDER_FROM_TRANSCRIPT_PROMPT = `Você recebeu a transcrição de um áudio em português: alguém lendo um pedido de compra (lista de itens, quantidades e preços).
+Extraia as informações e retorne APENAS um JSON válido, sem markdown.
+Formato:
+{
+  "fornecedor_nome": "nome do fornecedor se mencionado ou null",
+  "data_pedido": "YYYY-MM-DD se mencionada ou null",
+  "itens": [
+    { "descricao": "nome do produto", "codigo": "código se mencionado ou null", "quantidade": número, "preco_unitario": número }
+  ],
+  "total": número se mencionado ou null,
+  "observacoes": "observações ou null"
+}
+Interpretar números por extenso (ex: "três" = 3, "vinte e cinco reais" = 25). Itens são obrigatórios (array); outros campos opcionais.`;
+
+function normalizePurchaseOrderExtraction(raw: unknown): PurchaseOrderExtraction {
   const o = raw as Record<string, unknown>;
   const itens = Array.isArray(o.itens)
     ? (o.itens as unknown[]).map((x) => {
@@ -385,4 +441,55 @@ export async function extractPurchaseOrderFromImage(imageBase64: string, envConf
     total: typeof o.total === 'number' ? o.total : null,
     observacoes: typeof o.observacoes === 'string' ? o.observacoes : null,
   };
+}
+
+export async function extractPurchaseOrderFromAudio(audioBase64: string, envConfig: EnvConfig): Promise<PurchaseOrderExtraction> {
+  const validation = validateAndDecodeAudioBase64(audioBase64);
+  if (!validation.valid || !validation.file) {
+    throw new Error(validation.error || 'Áudio inválido');
+  }
+  const openai = new OpenAI({
+    apiKey: envConfig.openai.apiKey,
+    timeout: 60000,
+    maxRetries: 2,
+  });
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('Tempo limite excedido ao processar áudio')), 90000);
+  });
+  const transcriptResult = await Promise.race([
+    openai.audio.transcriptions.create({
+      file: validation.file,
+      model: 'whisper-1',
+      language: 'pt',
+      response_format: 'text',
+    }),
+    timeoutPromise,
+  ]);
+  const transcript =
+    typeof transcriptResult === 'string'
+      ? transcriptResult
+      : String((transcriptResult as { text?: string }).text ?? '').trim();
+  if (!transcript || !String(transcript).trim()) {
+    throw new Error('Não foi possível transcrever o áudio. Fale mais próximo do microfone ou envie um áudio mais claro.');
+  }
+  const chatPromise = openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: PURCHASE_ORDER_FROM_TRANSCRIPT_PROMPT },
+      { role: 'user', content: transcript },
+    ],
+    max_tokens: 2000,
+    temperature: 0.1,
+  });
+  const response = await Promise.race([chatPromise, timeoutPromise]);
+  const content = response.choices[0]?.message?.content;
+  if (!content) throw new Error('Resposta vazia ao interpretar o áudio');
+  const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  let raw: unknown;
+  try {
+    raw = JSON.parse(jsonContent) as unknown;
+  } catch {
+    throw new Error('Erro ao interpretar itens do áudio. Tente ser mais claro (ex.: "dois armários um vinte, quantidade três").');
+  }
+  return normalizePurchaseOrderExtraction(raw);
 }

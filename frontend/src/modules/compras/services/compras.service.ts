@@ -42,6 +42,10 @@ export async function extractCompraFromImage(imageBase64: string, token: string)
   return apiClient.post<PurchaseOrderExtraction>('/api/compras/extract-from-image', { imageBase64 }, token);
 }
 
+export async function extractCompraFromAudio(audioBase64: string, token: string): Promise<PurchaseOrderExtraction> {
+  return apiClient.post<PurchaseOrderExtraction>('/api/compras/extract-from-audio', { audioBase64 }, token);
+}
+
 /** Último preço pago por produto para um fornecedor (para preencher pedido) */
 export async function getUltimosPrecos(fornecedorId: string, token: string): Promise<Record<string, number>> {
   return apiClient.get<Record<string, number>>(

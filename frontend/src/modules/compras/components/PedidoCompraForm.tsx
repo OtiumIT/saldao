@@ -1,4 +1,5 @@
-import { FormEvent, useState, useEffect, useRef, useCallback } from 'react';
+import { FormEvent, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/hooks/useAuth';
 import * as comprasService from '../services/compras.service';
 import * as estoqueService from '../../estoque/services/estoque.service';
@@ -7,8 +8,10 @@ import { useProdutos } from '../../estoque/hooks/useProdutos';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
+import { Modal } from '../../../components/ui/Modal';
 import type { CreatePedidoCompraRequest } from '../types/compras.types';
 import type { Produto } from '../../estoque/types/estoque.types';
+import type { PurchaseOrderExtraction } from '../services/compras.service';
 
 interface PedidoCompraFormProps {
   pedidoId: string | null;
@@ -44,7 +47,11 @@ export function PedidoCompraForm({ pedidoId, initialItens, initialFornecedorId, 
   const [error, setError] = useState('');
   const [produtosDoFornecedor, setProdutosDoFornecedor] = useState<Produto[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [unresolvedItems, setUnresolvedItems] = useState<Array<{ index: number; descricao?: string; codigo?: string; quantidade: number; preco_unitario: number }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+
+  const supplierProductIds = useMemo(() => new Set(produtosDoFornecedor.map((p) => p.id)), [produtosDoFornecedor]);
 
   useEffect(() => {
     const hoje = new Date().toISOString().slice(0, 10);
@@ -130,6 +137,40 @@ export function PedidoCompraForm({ pedidoId, initialItens, initialFornecedorId, 
     return null;
   };
 
+  const applyExtraction = useCallback(
+    (extracted: PurchaseOrderExtraction) => {
+      if (extracted.fornecedor_nome) {
+        const f = fornecedores.find((x) => x.nome?.toLowerCase().includes(extracted.fornecedor_nome!.toLowerCase()));
+        if (f) setFornecedorId(f.id);
+      }
+      if (extracted.data_pedido) setDataPedido(extracted.data_pedido.slice(0, 10));
+      if (extracted.observacoes) setObservacoes(extracted.observacoes ?? '');
+      if (extracted.itens?.length) {
+        const unresolved: Array<{ index: number; descricao?: string; codigo?: string; quantidade: number; preco_unitario: number }> = [];
+        const rows: ItemRow[] = extracted.itens.map((item, idx) => {
+          const matched = matchProduto(item.codigo, item.descricao, item.preco_unitario);
+          if (!matched) {
+            unresolved.push({
+              index: idx,
+              descricao: item.descricao,
+              codigo: item.codigo,
+              quantidade: item.quantidade || 0,
+              preco_unitario: item.preco_unitario || 0,
+            });
+          }
+          return {
+            produto_id: matched?.id ?? '',
+            quantidade: item.quantidade || 0,
+            preco_unitario: matched ? matched.preco : item.preco_unitario || 0,
+          };
+        });
+        setItens(rows);
+        setUnresolvedItems(unresolved);
+      }
+    },
+    [fornecedores, matchProduto]
+  );
+
   const processFile = useCallback(
     async (file: File) => {
       if (!token) return;
@@ -143,38 +184,52 @@ export function PedidoCompraForm({ pedidoId, initialItens, initialFornecedorId, 
           reader.readAsDataURL(file);
         });
         const extracted = await comprasService.extractCompraFromImage(base64, token);
-        if (extracted.fornecedor_nome) {
-          const f = fornecedores.find((x) => x.nome?.toLowerCase().includes(extracted.fornecedor_nome!.toLowerCase()));
-          if (f) setFornecedorId(f.id);
-        }
-        if (extracted.data_pedido) setDataPedido(extracted.data_pedido.slice(0, 10));
-        if (extracted.observacoes) setObservacoes(extracted.observacoes ?? '');
-        if (extracted.itens?.length) {
-          const rows: ItemRow[] = extracted.itens.map((item) => {
-            const matched = matchProduto(item.codigo, item.descricao, item.preco_unitario);
-            return {
-              produto_id: matched?.id ?? '',
-              quantidade: item.quantidade || 0,
-              preco_unitario: matched ? matched.preco : item.preco_unitario || 0,
-            };
-          });
-          setItens(rows);
-        }
+        applyExtraction(extracted);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro ao extrair dados da foto');
       } finally {
         setExtractLoading(false);
       }
     },
-    [token, fornecedores, matchProduto]
+    [token, applyExtraction]
+  );
+
+  const processAudioFile = useCallback(
+    async (file: File) => {
+      if (!token) return;
+      setError('');
+      setExtractLoading(true);
+      try {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error('Falha ao ler áudio'));
+          reader.readAsDataURL(file);
+        });
+        const extracted = await comprasService.extractCompraFromAudio(base64, token);
+        applyExtraction(extracted);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao extrair dados do áudio');
+      } finally {
+        setExtractLoading(false);
+      }
+    },
+    [token, applyExtraction]
   );
 
   const handlePreencherPorFoto = () => fileInputRef.current?.click();
+  const handleEnviarAudio = () => audioInputRef.current?.click();
 
   const onFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (file) await processFile(file);
+  };
+
+  const onAudioSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file && file.type.startsWith('audio/')) await processAudioFile(file);
   };
 
   const onDrop = useCallback(
@@ -242,30 +297,48 @@ export function PedidoCompraForm({ pedidoId, initialItens, initialFornecedorId, 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileSelect} />
+      <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={onAudioSelect} />
       {!pedidoId && (
-        <div
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
-          onClick={() => !extractLoading && fileInputRef.current?.click()}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          className={`rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
-            isDragOver ? 'border-brand-gold bg-amber-50' : 'border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100'
-          } ${extractLoading ? 'pointer-events-none opacity-80' : 'cursor-pointer'}`}
-        >
-          {extractLoading ? (
-            <p className="text-gray-600 font-medium">Analisando foto... Aguarde.</p>
-          ) : (
-            <>
-              <svg className="mx-auto h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        <div className="space-y-3">
+          <div
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
+            onClick={() => !extractLoading && fileInputRef.current?.click()}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            className={`rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+              isDragOver ? 'border-brand-gold bg-amber-50' : 'border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100'
+            } ${extractLoading ? 'pointer-events-none opacity-80' : 'cursor-pointer'}`}
+          >
+            {extractLoading ? (
+              <p className="text-gray-600 font-medium">Analisando... Aguarde.</p>
+            ) : (
+              <>
+                <svg className="mx-auto h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="mt-2 text-sm font-medium text-gray-700">Enviar foto do pedido ou documento</p>
+                <p className="mt-1 text-xs text-gray-500">Clique ou arraste a imagem. OpenAI preenche o formulário.</p>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-400">ou</span>
+            <button
+              type="button"
+              onClick={handleEnviarAudio}
+              disabled={extractLoading}
+              className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <svg className="h-5 w-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
               </svg>
-              <p className="mt-2 text-sm font-medium text-gray-700">Enviar foto do pedido ou documento</p>
-              <p className="mt-1 text-xs text-gray-500">Clique ou arraste a imagem. OpenAI preenche o formulário automaticamente.</p>
-            </>
-          )}
+              Enviar áudio
+            </button>
+            <span className="text-xs text-gray-500">Grave no WhatsApp lendo os itens e quantidades; envie o áudio aqui.</span>
+          </div>
         </div>
       )}
       {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">{error}</div>}
@@ -300,26 +373,40 @@ export function PedidoCompraForm({ pedidoId, initialItens, initialFornecedorId, 
       <Input label="Observações" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} disabled={loading} />
 
       <div>
-        <div className="flex justify-between items-center mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <label className="block text-sm font-medium text-gray-700">Itens</label>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
             <Button type="button" variant="secondary" size="sm" onClick={handlePreencherPorFoto} disabled={!token || extractLoading || loading}>
               {extractLoading ? 'Analisando...' : 'Preencher por foto'}
             </Button>
-            {!modoListaPorFornecedor && (
+            {modoListaPorFornecedor ? (
+              <>
+                <Button type="button" variant="secondary" size="sm" onClick={addItem} disabled={loading}>
+                  Pesquisar em todos
+                </Button>
+                <Link
+                  to="/produtos"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-brand-gold hover:underline font-medium"
+                >
+                  Inserir novo produto
+                </Link>
+              </>
+            ) : (
               <Button type="button" variant="secondary" size="sm" onClick={addItem} disabled={loading}>+ Item</Button>
             )}
           </div>
         </div>
         {modoListaPorFornecedor && (
-          <p className="text-sm text-gray-600 mb-1">Preencha a quantidade; o valor vem da última compra e pode ser editado.</p>
+          <p className="text-sm text-gray-600 mb-1">Lista do fornecedor. Use &quot;Pesquisar em todos&quot; para outro produto ou &quot;Inserir novo produto&quot; para cadastrar.</p>
         )}
         {extractLoading && <p className="text-sm text-blue-600 mb-1">Revise os dados antes de salvar.</p>}
         <div className="space-y-2 max-h-60 overflow-y-auto">
           {itens.map((row, index) => (
-            <div key={row.produto_id || index} className="grid grid-cols-12 gap-2 items-end">
+            <div key={`${row.produto_id}-${index}`} className="grid grid-cols-12 gap-2 items-end">
               <div className="col-span-5">
-                {modoListaPorFornecedor && row.produto_id ? (
+                {modoListaPorFornecedor && row.produto_id && supplierProductIds.has(row.produto_id) ? (
                   <span className="block text-sm py-2 text-gray-800">{produtoLabel(row.produto_id)}</span>
                 ) : (
                   <Select
@@ -365,6 +452,58 @@ export function PedidoCompraForm({ pedidoId, initialItens, initialFornecedorId, 
         <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>Cancelar</Button>
         <Button type="submit" disabled={loading}>{loading ? 'Salvando...' : pedidoId ? 'Atualizar' : 'Criar'}</Button>
       </div>
+
+      <Modal
+        isOpen={unresolvedItems.length > 0}
+        onClose={() => setUnresolvedItems([])}
+        title="Produtos não identificados"
+        size="md"
+      >
+        <p className="text-sm text-gray-600 mb-4">
+          Não foi possível associar os itens abaixo a um produto. Selecione um produto existente ou cadastre um novo.
+        </p>
+        <div className="space-y-4">
+          {unresolvedItems.map((item) => (
+            <div key={item.index} className="flex flex-wrap items-center gap-2 p-3 bg-gray-50 rounded-lg">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-800 truncate">
+                  {item.descricao || item.codigo || 'Item sem descrição'}
+                  {item.codigo && item.descricao ? ` (${item.codigo})` : ''}
+                </p>
+                <p className="text-xs text-gray-500">Qtd: {item.quantidade} · R$ {item.preco_unitario.toFixed(2)}/un</p>
+              </div>
+              <div className="min-w-[180px]">
+                <Select
+                  options={[{ value: '', label: '— Selecione um produto —' }, ...produtoOptions]}
+                  value={itens[item.index]?.produto_id ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) return;
+                    const p = produtos.find((x) => x.id === val);
+                    updateItem(item.index, 'produto_id', val);
+                    if (p) updateItem(item.index, 'preco_unitario', p.preco_compra ?? itens[item.index]?.preco_unitario ?? 0);
+                    setUnresolvedItems((prev) => prev.filter((u) => u.index !== item.index));
+                  }}
+                  disabled={loading}
+                />
+              </div>
+              <Link
+                to="/produtos"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-brand-gold hover:underline whitespace-nowrap"
+              >
+                Cadastrar novo
+              </Link>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <Button type="button" variant="secondary" onClick={() => setUnresolvedItems([])}>
+            Fechar
+          </Button>
+        </div>
+      </Modal>
     </form>
   );
 }

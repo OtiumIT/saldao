@@ -58,7 +58,7 @@ export function ComprasListPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Pedidos de compra</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            No novo pedido você pode enviar uma foto do documento: a IA (OpenAI) preenche fornecedor, data, itens e totais.
+            No novo pedido: envie uma foto do documento ou um áudio (ex.: áudio do WhatsApp lendo os itens e quantidades). A IA preenche o formulário.
           </p>
         </div>
         <Button onClick={() => { setEditingId(null); setIsFormOpen(true); }} className="sm:flex-shrink-0">Novo pedido</Button>
