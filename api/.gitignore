@@ -11,8 +11,8 @@ coverage/
 dist/
 build/
 
-# Environment variables (.env commitado por decisão do projeto)
-# .env
+# Environment variables (nunca commitar .env – contém segredos)
+.env
 .env.local
 .env.development.local
 .env.test.local
