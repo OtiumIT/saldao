@@ -457,7 +457,7 @@ export function PedidoCompraForm({ pedidoId, initialItens, initialFornecedorId, 
         isOpen={unresolvedItems.length > 0}
         onClose={() => setUnresolvedItems([])}
         title="Produtos não identificados"
-        size="md"
+        size="2xl"
       >
         <p className="text-sm text-gray-600 mb-4">
           Não foi possível associar os itens abaixo a um produto. Selecione um produto existente ou cadastre um novo.
@@ -466,7 +466,7 @@ export function PedidoCompraForm({ pedidoId, initialItens, initialFornecedorId, 
           {unresolvedItems.map((item) => (
             <div key={item.index} className="flex flex-wrap items-center gap-2 p-3 bg-gray-50 rounded-lg">
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-800 truncate">
+                <p className="text-sm font-medium text-gray-800 break-words">
                   {item.descricao || item.codigo || 'Item sem descrição'}
                   {item.codigo && item.descricao ? ` (${item.codigo})` : ''}
                 </p>
