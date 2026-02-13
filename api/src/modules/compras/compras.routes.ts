@@ -41,7 +41,34 @@ const receberSchema = z.object({
 const extractFromImageSchema = z.object({ imageBase64: z.string().min(1) });
 const extractFromAudioSchema = z.object({ audioBase64: z.string().min(1) });
 
+const importExcelRowSchema = z.object({
+  codigo: z.string().optional(),
+  descricao: z.string().min(1),
+  quantidade: z.number().min(0.001),
+  valor_unitario: z.number().min(0),
+  preco_revenda: z.number().min(0).optional(),
+});
+const importFromExcelSchema = z.object({
+  fornecedor_id: z.string().uuid(),
+  data_pedido: z.string().optional(),
+  observacoes: z.string().nullable().optional(),
+  rows: z.array(importExcelRowSchema).min(1, 'Pelo menos um item na planilha'),
+});
+
 export const comprasRoutes = new Hono<Ctx>()
+  .post('/import-from-excel', async (c) => {
+    const auth = await requireAuth(c);
+    if (auth instanceof Response) return auth;
+    const body = await c.req.json();
+    const parsed = importFromExcelSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
+    try {
+      const result = await comprasService.importFromExcel(c.env, parsed.data);
+      return c.json(result, 201);
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : 'Erro ao importar planilha' }, 400);
+    }
+  })
   .post('/extract-from-audio', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;

@@ -1,12 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../auth/hooks/useAuth';
 import { useCompras } from '../hooks/useCompras';
 import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
 import { DataTable } from '../../../components/ui/DataTable';
 import { PedidoCompraForm } from '../components/PedidoCompraForm';
 import { ReceberPedidoModal } from '../components/ReceberPedidoModal';
+import { ImportPlanilhaModal } from '../components/ImportPlanilhaModal';
+import { parsePlanilhaCompras } from '../lib/parse-planilha-compras';
 import type { PedidoCompraComFornecedor } from '../types/compras.types';
+import type { ImportExcelRow } from '../services/compras.service';
 
 const STATUS_LABEL: Record<string, string> = {
   em_aberto: 'Em aberto',
@@ -17,6 +21,7 @@ const STATUS_LABEL: Record<string, string> = {
 type LocationState = { itensPrePreenchidos?: Array<{ produto_id: string; quantidade: number; preco_unitario: number }>; fornecedor_id?: string };
 
 export function ComprasListPage() {
+  const { token } = useAuth();
   const { pedidos, loading, error, createPedido, updatePedido, receberPedido, fetchPedidos } = useCompras();
   const location = useLocation();
   const navigate = useNavigate();
@@ -26,6 +31,9 @@ export function ComprasListPage() {
   const [recebendoId, setRecebendoId] = useState<string | null>(null);
   const [initialItens, setInitialItens] = useState<LocationState['itensPrePreenchidos']>(state?.itensPrePreenchidos ?? undefined);
   const [initialFornecedorId, setInitialFornecedorId] = useState<string | undefined>(state?.fornecedor_id);
+  const [importRows, setImportRows] = useState<ImportExcelRow[] | null>(null);
+  const [importError, setImportError] = useState('');
+  const planilhaInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (state?.itensPrePreenchidos?.length) {
@@ -61,8 +69,34 @@ export function ComprasListPage() {
             No novo pedido: envie uma foto do documento ou um áudio (ex.: áudio do WhatsApp lendo os itens e quantidades). A IA preenche o formulário.
           </p>
         </div>
-        <Button onClick={() => { setEditingId(null); setIsFormOpen(true); }} className="sm:flex-shrink-0">Novo pedido</Button>
+        <div className="flex gap-2 flex-shrink-0">
+          <input
+            ref={planilhaInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (!file) return;
+              setImportError('');
+              try {
+                const rows = await parsePlanilhaCompras(file);
+                setImportRows(rows);
+              } catch (err) {
+                setImportError(err instanceof Error ? err.message : 'Erro ao ler planilha');
+              }
+            }}
+          />
+          <Button variant="secondary" onClick={() => planilhaInputRef.current?.click()}>
+            Importar planilha
+          </Button>
+          <Button onClick={() => { setEditingId(null); setIsFormOpen(true); }}>Novo pedido</Button>
+        </div>
       </div>
+      {importError && (
+        <div className="p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg text-sm">{importError}</div>
+      )}
 
       {pedidos.length === 0 && !loading ? (
         <div className="text-center py-12 bg-white rounded-lg shadow">
@@ -126,6 +160,14 @@ export function ComprasListPage() {
           />
         )}
       </Modal>
+
+      <ImportPlanilhaModal
+        isOpen={importRows !== null && importRows.length > 0}
+        onClose={() => { setImportRows(null); setImportError(''); }}
+        onSuccess={() => { setImportRows(null); fetchPedidos(); }}
+        rows={importRows ?? []}
+        token={token}
+      />
     </div>
   );
 }

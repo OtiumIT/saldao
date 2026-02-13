@@ -53,3 +53,23 @@ export async function getUltimosPrecos(fornecedorId: string, token: string): Pro
     token
   );
 }
+
+export interface ImportExcelRow {
+  codigo?: string;
+  descricao: string;
+  quantidade: number;
+  valor_unitario: number;
+  preco_revenda?: number;
+}
+
+export interface ImportFromExcelResult {
+  pedido_id: string;
+  produtos_criados: number;
+}
+
+export async function importFromExcel(
+  data: { fornecedor_id: string; data_pedido?: string; observacoes?: string | null; rows: ImportExcelRow[] },
+  token: string
+): Promise<ImportFromExcelResult> {
+  return apiClient.post<ImportFromExcelResult>('/api/compras/import-from-excel', data, token);
+}
