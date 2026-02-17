@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useProdutos } from '../hooks/useProdutos';
 import { useFornecedores } from '../../fornecedores/hooks/useFornecedores';
 import { useCategoriasProduto } from '../../categorias-produto/hooks/useCategoriasProduto';
@@ -8,6 +9,7 @@ import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
 import { DataTable } from '../../../components/ui/DataTable';
 import * as estoqueService from '../services/estoque.service';
+import type { FiltrosProduto } from '../services/estoque.service';
 import { exportProdutosToXlsx, parseXlsxToProdutos } from '../lib/xlsx-produtos';
 import type { ProdutoComSaldo, CreateProdutoRequest, TipoProduto, SaldoPorCor } from '../types/estoque.types';
 
@@ -16,17 +18,30 @@ const TIPO_LABEL: Record<string, string> = { revenda: 'Revenda', insumos: 'Insum
 /** 'all' = todos, null = sem categoria, string = id da categoria */
 type FiltroCategoria = 'all' | null | string;
 type FiltroTipo = 'all' | TipoProduto;
+type FiltroFornecedor = 'all' | string;
 
-export function ProductsListPage() {
-  const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>('all');
-  const filtroCategoriaState = useState<FiltroCategoria>('all');
-  const [filtroCategoria, setFiltroCategoria] = filtroCategoriaState;
-  const filtrosApi: { tipo?: TipoProduto; categoria_id?: string | null } | undefined =
-    filtroTipo === 'all' && filtroCategoria === 'all'
+export interface ProductsListPageProps {
+  /** Quando vindo do menu por tipo (Estoque de Insumos / Revenda / Fábricados), fixa o filtro nesse tipo */
+  tipoFromRoute?: 'insumos' | 'revenda' | 'fabricado';
+}
+
+export function ProductsListPage({ tipoFromRoute }: ProductsListPageProps = {}) {
+  const [filtroTipoState, setFiltroTipoState] = useState<FiltroTipo>('all');
+  const filtroTipo: FiltroTipo = tipoFromRoute ?? filtroTipoState;
+  const setFiltroTipo = tipoFromRoute ? (() => {}) : setFiltroTipoState;
+  const [filtroFornecedor, setFiltroFornecedor] = useState<FiltroFornecedor>('all');
+  const [filtroCategoria, setFiltroCategoria] = useState<FiltroCategoria>('all');
+  const [buscaTexto, setBuscaTexto] = useState('');
+  useEffect(() => {
+    if (tipoFromRoute) setFiltroTipoState(tipoFromRoute);
+  }, [tipoFromRoute]);
+  const filtrosApi: FiltrosProduto | undefined =
+    filtroTipo === 'all' && filtroCategoria === 'all' && filtroFornecedor === 'all'
       ? undefined
       : {
           ...(filtroTipo !== 'all' ? { tipo: filtroTipo } : {}),
           ...(filtroCategoria !== 'all' ? { categoria_id: filtroCategoria } : {}),
+          ...(filtroFornecedor !== 'all' ? { fornecedor_id: filtroFornecedor } : {}),
         };
   const { token } = useAuth();
   const { produtos, loading, error, createProduto, updateProduto, deleteProduto, importProdutos, fetchProdutos } = useProdutos(true, filtrosApi);
@@ -61,10 +76,21 @@ export function ProductsListPage() {
   );
 
   const categoriaPorId = new Map(categorias.map((c) => [c.id, c.nome]));
+  const fornecedorPorId = new Map(fornecedores.map((f) => [f.id, f.nome]));
 
-  const produtosExibidos = filterAbaixoMinimo
+  let produtosExibidos = filterAbaixoMinimo
     ? produtos.filter((p) => 'saldo' in p && p.estoque_minimo > 0 && (p as ProdutoComSaldo).saldo <= p.estoque_minimo)
     : produtos;
+  if (buscaTexto.trim()) {
+    const q = buscaTexto.trim().toLowerCase();
+    produtosExibidos = produtosExibidos.filter((p) => {
+      const matchCodigo = (p.codigo ?? '').toLowerCase().includes(q);
+      const matchDescricao = (p.descricao ?? '').toLowerCase().includes(q);
+      const fornecedorIds = p.fornecedores_ids?.length ? p.fornecedores_ids : (p.fornecedor_principal_id ? [p.fornecedor_principal_id] : []);
+      const matchFornecedor = fornecedorIds.some((fid) => (fornecedorPorId.get(fid) ?? '').toLowerCase().includes(q));
+      return matchCodigo || matchDescricao || matchFornecedor;
+    });
+  }
 
   const handleCreate = () => {
     setEditingProduto(undefined);
@@ -136,10 +162,21 @@ export function ProductsListPage() {
     );
   }
 
+  const pageTitle = tipoFromRoute ? `Estoque de ${TIPO_LABEL[tipoFromRoute]}` : 'Produtos';
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap justify-between items-center gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Produtos</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{pageTitle}</h1>
+          {tipoFromRoute && (
+            <p className="text-sm text-gray-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
+              <Link to="/estoque/insumos" className={tipoFromRoute === 'insumos' ? 'font-medium text-gray-700' : 'hover:underline'}>Insumos</Link>
+              <Link to="/estoque/revenda" className={tipoFromRoute === 'revenda' ? 'font-medium text-gray-700' : 'hover:underline'}>Revenda</Link>
+              <Link to="/estoque/fabricados" className={tipoFromRoute === 'fabricado' ? 'font-medium text-gray-700' : 'hover:underline'}>Fábricados</Link>
+            </p>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" size="sm" onClick={handleExport}>
             Exportar XLSX
@@ -152,67 +189,78 @@ export function ProductsListPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-sm text-gray-600">Filtro:</span>
-          <button
-            type="button"
-            onClick={() => setFilterAbaixoMinimo(false)}
-            className={`px-3 py-1.5 rounded text-sm font-medium ${!filterAbaixoMinimo ? 'bg-brand-gold text-brand-black font-medium' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-          >
-            Todos
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterAbaixoMinimo(true)}
-            className={`px-3 py-1.5 rounded text-sm font-medium ${filterAbaixoMinimo ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-          >
-            Abaixo do mínimo
-          </button>
-          <span className="text-sm text-gray-400 mx-1">|</span>
-          <span className="text-sm text-gray-600">Tipo:</span>
-          <button
-            type="button"
-            onClick={() => setFiltroTipo('all')}
-            className={`px-3 py-1.5 rounded text-sm font-medium ${filtroTipo === 'all' ? 'bg-brand-gold text-brand-black font-medium' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-          >
-            Todos
-          </button>
-          {(['revenda', 'insumos', 'fabricado'] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setFiltroTipo(t)}
-              className={`px-3 py-1.5 rounded text-sm font-medium ${filtroTipo === t ? 'bg-brand-gold text-brand-black font-medium' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+      <div className="flex flex-wrap gap-4 items-end p-4 bg-white rounded-lg border border-gray-200">
+          <div className="flex flex-wrap gap-3 items-center">
+            <label className="text-sm font-medium text-gray-700">Fornecedor</label>
+            <select
+              value={filtroFornecedor}
+              onChange={(e) => setFiltroFornecedor(e.target.value as FiltroFornecedor)}
+              className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 min-w-[180px]"
             >
-              {TIPO_LABEL[t]}
-            </button>
-          ))}
-          <span className="text-sm text-gray-400 mx-1">|</span>
-          <span className="text-sm text-gray-600">Categoria:</span>
-          <button
-            type="button"
-            onClick={() => setFiltroCategoria('all')}
-            className={`px-3 py-1.5 rounded text-sm font-medium ${filtroCategoria === 'all' ? 'bg-brand-gold text-brand-black font-medium' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-          >
-            Todas
-          </button>
-          <button
-            type="button"
-            onClick={() => setFiltroCategoria(null)}
-            className={`px-3 py-1.5 rounded text-sm font-medium ${filtroCategoria === null ? 'bg-brand-gold text-brand-black font-medium' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-          >
-            Sem categoria
-          </button>
-          {categorias.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setFiltroCategoria(c.id)}
-              className={`px-3 py-1.5 rounded text-sm font-medium ${filtroCategoria === c.id ? 'bg-brand-gold text-brand-black font-medium' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+              <option value="all">Todos</option>
+              {fornecedores.map((f) => (
+                <option key={f.id} value={f.id}>{f.nome}</option>
+              ))}
+            </select>
+          </div>
+          {!tipoFromRoute && (
+            <div className="flex flex-wrap gap-3 items-center">
+              <label className="text-sm font-medium text-gray-700">Tipo</label>
+              <select
+                value={filtroTipo}
+                onChange={(e) => setFiltroTipo(e.target.value as FiltroTipo)}
+                className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 min-w-[160px]"
+              >
+                <option value="all">Todos</option>
+                <option value="revenda">{TIPO_LABEL.revenda}</option>
+                <option value="insumos">{TIPO_LABEL.insumos}</option>
+                <option value="fabricado">{TIPO_LABEL.fabricado}</option>
+              </select>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-3 items-center">
+            <label className="text-sm font-medium text-gray-700">Categoria</label>
+            <select
+              value={filtroCategoria === null ? '' : filtroCategoria}
+              onChange={(e) => {
+                const v = e.target.value;
+                setFiltroCategoria(v === 'all' ? 'all' : v === '' ? null : v);
+              }}
+              className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 min-w-[160px]"
             >
-              {c.nome}
+              <option value="all">Todas</option>
+              <option value="">Sem categoria</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>{c.nome}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-wrap gap-3 items-center">
+            <label className="text-sm font-medium text-gray-700">Busca (código/descrição)</label>
+            <input
+              type="text"
+              value={buscaTexto}
+              onChange={(e) => setBuscaTexto(e.target.value)}
+              placeholder="Código, descrição ou fornecedor (ex.: Porto, Hiper, colchão)"
+              className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 min-w-[200px]"
+            />
+          </div>
+          <div className="flex gap-2 ml-auto">
+            <button
+              type="button"
+              onClick={() => setFilterAbaixoMinimo(false)}
+              className={`px-3 py-1.5 rounded text-sm font-medium ${!filterAbaixoMinimo ? 'bg-amber-500 text-gray-900 font-medium' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+            >
+              Todos
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setFilterAbaixoMinimo(true)}
+              className={`px-3 py-1.5 rounded text-sm font-medium ${filterAbaixoMinimo ? 'bg-amber-500 text-gray-900' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+            >
+              Abaixo do mínimo
+            </button>
+          </div>
         </div>
 
       {importResult && (

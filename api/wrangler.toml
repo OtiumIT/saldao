@@ -17,11 +17,13 @@ GMAIL_USER = ""
 CONTACT_EMAIL = ""
 SUPABASE_URL = "https://eoieosbjgwskiobsuplz.supabase.co"
 USE_SUPABASE_DATA_API = "true"
+# Endereço da loja (origem para cálculo de distância/frete) — site: saldaomoveisjerusalem.com.br
+ENDERECO_ORIGEM_LOJA = "Av. da Barreira Grande, 2504, Vila Bancária, São Paulo, SP"
 
 # Secrets (definir via CLI: wrangler secret put <NOME>)
 # JWT_SECRET, FIXED_AUTH_PASSWORD, GMAIL_APP_PASSWORD, OPENAI_API_KEY
-# Opcionais (se usar Supabase auth): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# Para cálculo de distância no Caixa: wrangler secret put GOOGLE_MAPS_API_KEY
 
 [env.production]
-vars = { CORS_ORIGIN = "https://gestao.saldaomoveisjerusalem.com.br", FRONTEND_URL = "https://gestao.saldaomoveisjerusalem.com.br" }
+vars = { CORS_ORIGIN = "https://gestao.saldaomoveisjerusalem.com.br", FRONTEND_URL = "https://gestao.saldaomoveisjerusalem.com.br", ENDERECO_ORIGEM_LOJA = "Av. da Barreira Grande, 2504, Vila Bancária, São Paulo, SP" }
 # routes = [{ pattern = "api.seudominio.com/*", zone_name = "seudominio.com" }]

@@ -53,12 +53,13 @@ export async function findById(env: Env, id: string): Promise<PedidoVendaComClie
   if (!pedido) return null;
 
   const cliente = pedido.cliente_id
-    ? await db.findById<{ nome: string }>(client, 'clientes', pedido.cliente_id)
+    ? await db.findById<{ nome: string; fone: string | null }>(client, 'clientes', pedido.cliente_id)
     : null;
 
   return {
     ...pedido,
     cliente_nome: cliente?.nome ?? null,
+    cliente_fone: cliente?.fone ?? null,
   };
 }
 

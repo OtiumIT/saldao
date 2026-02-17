@@ -18,6 +18,8 @@ const nodeEnv: Env = {
   JWT_SECRET: process.env.JWT_SECRET,
   DATABASE_URL: process.env.DATABASE_URL,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? '',
+  GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY ?? '',
+  ENDERECO_ORIGEM_LOJA: process.env.ENDERECO_ORIGEM_LOJA ?? '',
   GMAIL_USER: process.env.GMAIL_USER ?? '',
   GMAIL_APP_PASSWORD: process.env.GMAIL_APP_PASSWORD ?? '',
   CONTACT_EMAIL: process.env.CONTACT_EMAIL,

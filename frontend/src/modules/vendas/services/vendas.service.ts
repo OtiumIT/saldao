@@ -73,3 +73,14 @@ export interface ItemSugerido {
 export async function getItensSugeridos(produtoId: string, token: string): Promise<ItemSugerido[]> {
   return apiClient.get<ItemSugerido[]>(`/api/vendas/itens-sugeridos?produto_id=${encodeURIComponent(produtoId)}`, token);
 }
+
+export interface CalcularDistanciaResponse {
+  km: number;
+}
+
+export async function getCalcularDistancia(endereco: string, token: string): Promise<CalcularDistanciaResponse> {
+  return apiClient.get<CalcularDistanciaResponse>(
+    `/api/vendas/calcular-distancia?endereco=${encodeURIComponent(endereco)}`,
+    token
+  );
+}

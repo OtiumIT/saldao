@@ -24,6 +24,7 @@ export async function listProdutos(
   if (comSaldos) params.set('saldos', '1');
   if (filtros?.tipo) params.set('tipo', filtros.tipo);
   if (filtros?.categoria_id !== undefined) params.set('categoria_id', filtros.categoria_id ?? '');
+  if (filtros?.fornecedor_id) params.set('fornecedor_id', filtros.fornecedor_id);
   const q = params.toString();
   return apiClient.get<ProdutoComSaldo[] | Produto[]>(`/api/produtos${q ? `?${q}` : ''}`, token);
 }

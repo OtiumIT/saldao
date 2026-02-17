@@ -8,6 +8,8 @@ type Ctx = { Bindings: Env };
 
 const createSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
+  cpf: z.string().optional().nullable(),
+  cnpj: z.string().optional().nullable(),
   fone: z.string().optional(),
   email: z.string().email().optional().or(z.literal('')),
   endereco_entrega: z.string().optional(),
@@ -21,6 +23,30 @@ export const clientesRoutes = new Hono<Ctx>()
   .get('/', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
+    const identificador = c.req.query('identificador');
+    const busca = c.req.query('busca');
+    // Busca por qualquer texto (nome, etc.) — retorna array
+    if (busca && typeof busca === 'string' && busca.trim()) {
+      try {
+        const list = await clientesService.searchByQuery(c.env, busca.trim());
+        return c.json(list);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : 'Erro ao buscar' }, 500);
+      }
+    }
+    // Busca exata por CPF/CNPJ/WhatsApp (só dígitos, 10+) — retorna um cliente ou 404
+    if (identificador && typeof identificador === 'string' && identificador.trim()) {
+      const digits = identificador.replace(/\D/g, '');
+      if (digits.length >= 10) {
+        try {
+          const cliente = await clientesService.findByIdentifier(c.env, digits);
+          if (cliente) return c.json(cliente);
+          return c.json({ error: 'Cliente não encontrado' }, 404);
+        } catch (e) {
+          return c.json({ error: e instanceof Error ? e.message : 'Erro ao buscar' }, 500);
+        }
+      }
+    }
     try {
       const list = await clientesService.list(c.env);
       return c.json(list);

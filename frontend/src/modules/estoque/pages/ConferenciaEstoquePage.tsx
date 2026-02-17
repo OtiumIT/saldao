@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useProdutos } from '../hooks/useProdutos';
 import { useMovimentacoes } from '../hooks/useMovimentacoes';
 import { useCategoriasProduto } from '../../categorias-produto/hooks/useCategoriasProduto';
+import { useFornecedores } from '../../fornecedores/hooks/useFornecedores';
 import { Button } from '../../../components/ui/Button';
 import { downloadTemplateConferencia, parseConferenciaFile } from '../lib/xlsx-conferencia';
 import { DataTable } from '../../../components/ui/DataTable';
@@ -16,27 +17,46 @@ type FiltroCategoria = 'all' | null | string;
 export function ConferenciaEstoquePage() {
   const [filtroTipo, setFiltroTipo] = useState<TipoProduto | 'all'>('all');
   const [filtroCategoria, setFiltroCategoria] = useState<FiltroCategoria>('all');
+  const [filtroFornecedor, setFiltroFornecedor] = useState<'all' | string>('all');
+  const [buscaTexto, setBuscaTexto] = useState('');
   const filtrosApi: FiltrosProduto | undefined =
-    filtroTipo === 'all' && filtroCategoria === 'all'
+    filtroTipo === 'all' && filtroCategoria === 'all' && filtroFornecedor === 'all'
       ? undefined
       : {
           ...(filtroTipo !== 'all' ? { tipo: filtroTipo } : {}),
           ...(filtroCategoria !== 'all' ? { categoria_id: filtroCategoria } : {}),
+          ...(filtroFornecedor !== 'all' ? { fornecedor_id: filtroFornecedor } : {}),
         };
   const { produtos, loading, error, fetchProdutos } = useProdutos(true, filtrosApi);
   const { categorias } = useCategoriasProduto();
+  const { fornecedores } = useFornecedores();
   const { conferenciaLote, criarAjuste } = useMovimentacoes();
   const [resultado, setResultado] = useState<{ processados: number; erros: string[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** Valores digitados nos inputs de saldo (antes de salvar) */
   const [localSaldos, setLocalSaldos] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  /** Feedback visual: sucesso ou erro ao salvar um saldo */
+  const [saveFeedback, setSaveFeedback] = useState<{ tipo: 'sucesso' | 'erro'; mensagem: string; codigo?: string } | null>(null);
 
-  const totalUnidades = produtos.reduce((acc, p) => acc + p.saldo, 0);
+  const fornecedorPorId = new Map(fornecedores.map((f) => [f.id, f.nome]));
+  let produtosExibidos = produtos;
+  if (buscaTexto.trim()) {
+    const q = buscaTexto.trim().toLowerCase();
+    produtosExibidos = produtos.filter((p) => {
+      const matchCodigo = (p.codigo ?? '').toLowerCase().includes(q);
+      const matchDescricao = (p.descricao ?? '').toLowerCase().includes(q);
+      const fornecedorIds = p.fornecedores_ids?.length ? p.fornecedores_ids : (p.fornecedor_principal_id ? [p.fornecedor_principal_id] : []);
+      const matchFornecedor = fornecedorIds.some((fid) => (fornecedorPorId.get(fid) ?? '').toLowerCase().includes(q));
+      return matchCodigo || matchDescricao || matchFornecedor;
+    });
+  }
+  const totalUnidades = produtosExibidos.reduce((acc, p) => acc + p.saldo, 0);
   const categoriaPorId = new Map(categorias.map((c) => [c.id, c.nome]));
 
   const handleBaixar = () => {
-    const rows = produtos.map((p) => ({ codigo: p.codigo, descricao: p.descricao, saldo: p.saldo, id: p.id }));
+    const lista = buscaTexto.trim() ? produtosExibidos : produtos;
+    const rows = lista.map((p) => ({ codigo: p.codigo, descricao: p.descricao, saldo: p.saldo, id: p.id }));
     downloadTemplateConferencia(rows);
   };
 
@@ -80,9 +100,17 @@ export function ConferenciaEstoquePage() {
     async (p: ProdutoComSaldo) => {
       const valueStr = localSaldos[p.id] ?? String(p.saldo);
       const parsed = parseInt(valueStr.replace(/\s/g, '').replace(',', '.'), 10);
-      if (Number.isNaN(parsed) || parsed < 0) return;
+      if (Number.isNaN(parsed) || parsed < 0) {
+        setSaveFeedback({ tipo: 'erro', mensagem: 'Informe um número válido (inteiro ≥ 0).', codigo: p.codigo });
+        return;
+      }
       const diff = Math.round(parsed - p.saldo);
-      if (diff === 0) return;
+      if (diff === 0) {
+        setSaveFeedback({ tipo: 'sucesso', mensagem: 'Nenhuma alteração (valor igual ao atual).', codigo: p.codigo });
+        setTimeout(() => setSaveFeedback(null), 2500);
+        return;
+      }
+      setSaveFeedback(null);
       setSavingId(p.id);
       try {
         await criarAjuste(p.id, diff, 'Conferência rápida');
@@ -92,8 +120,11 @@ export function ConferenciaEstoquePage() {
           delete next[p.id];
           return next;
         });
-      } catch {
-        // erro já tratado no hook
+        setSaveFeedback({ tipo: 'sucesso', mensagem: 'Saldo salvo com sucesso.', codigo: p.codigo });
+        setTimeout(() => setSaveFeedback(null), 3000);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Erro ao salvar. Tente novamente.';
+        setSaveFeedback({ tipo: 'erro', mensagem: msg, codigo: p.codigo });
       } finally {
         setSavingId(null);
       }
@@ -130,7 +161,7 @@ export function ConferenciaEstoquePage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Conferência de estoque</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {produtos.length} produto(s) · {totalUnidades} unidade(s) no total
+            {produtosExibidos.length} produto(s) · {totalUnidades} unidade(s) no total
           </p>
         </div>
         <div className="flex gap-2">
@@ -157,41 +188,63 @@ export function ConferenciaEstoquePage() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-4 sm:gap-6 items-center">
-        <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-sm font-medium text-gray-600">Tipo</span>
-          {(['all', 'fabricado', 'revenda', 'insumos'] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setFiltroTipo(t)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filtroTipo === t ? 'bg-brand-gold text-brand-black' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-            >
-              {t === 'all' ? 'Todos' : TIPO_LABEL[t]}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 min-w-0">
-          <label htmlFor="filtro-categoria" className="text-sm font-medium text-gray-600 shrink-0">
-            Categoria
-          </label>
+      <div className="flex flex-wrap gap-4 p-4 bg-white rounded-lg border border-gray-200 items-end">
+        <div className="flex flex-wrap gap-3 items-center">
+          <label htmlFor="conf-fornecedor" className="text-sm font-medium text-gray-700">Fornecedor</label>
           <select
-            id="filtro-categoria"
-            value={filtroCategoria === null ? '__null__' : filtroCategoria}
-            onChange={(e) => {
-              const v = e.target.value;
-              setFiltroCategoria(v === '__null__' ? null : v === 'all' ? 'all' : v);
-            }}
-            className="min-h-[40px] px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-gold focus:border-brand-gold min-w-[160px] max-w-full"
+            id="conf-fornecedor"
+            value={filtroFornecedor}
+            onChange={(e) => setFiltroFornecedor(e.target.value as 'all' | string)}
+            className="min-h-[40px] px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white min-w-[180px]"
           >
-            <option value="all">Todas</option>
-            <option value="__null__">Sem categoria</option>
-            {categorias.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
+            <option value="all">Todos</option>
+            {fornecedores.map((f) => (
+              <option key={f.id} value={f.id}>{f.nome}</option>
             ))}
           </select>
+        </div>
+        <div className="flex flex-wrap gap-3 items-center">
+          <label htmlFor="conf-tipo" className="text-sm font-medium text-gray-700">Tipo</label>
+          <select
+            id="conf-tipo"
+            value={filtroTipo}
+            onChange={(e) => setFiltroTipo(e.target.value as TipoProduto | 'all')}
+            className="min-h-[40px] px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white min-w-[160px]"
+          >
+            <option value="all">Todos</option>
+            <option value="revenda">{TIPO_LABEL.revenda}</option>
+            <option value="insumos">{TIPO_LABEL.insumos}</option>
+            <option value="fabricado">{TIPO_LABEL.fabricado}</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2 min-w-0">
+          <label htmlFor="conf-categoria" className="text-sm font-medium text-gray-700 shrink-0">Categoria</label>
+          <select
+            id="conf-categoria"
+            value={filtroCategoria === null ? '' : filtroCategoria}
+            onChange={(e) => {
+              const v = e.target.value;
+              setFiltroCategoria(v === 'all' ? 'all' : v === '' ? null : v);
+            }}
+            className="min-h-[40px] px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white min-w-[160px] max-w-full"
+          >
+            <option value="all">Todas</option>
+            <option value="">Sem categoria</option>
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>{c.nome}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-wrap gap-3 items-center min-w-0 flex-1">
+          <label htmlFor="conf-busca" className="text-sm font-medium text-gray-700 shrink-0">Busca</label>
+          <input
+            id="conf-busca"
+            type="text"
+            value={buscaTexto}
+            onChange={(e) => setBuscaTexto(e.target.value)}
+            placeholder="Código, descrição ou fornecedor (ex.: Porto, Hiper, colchão)"
+            className="min-h-[40px] px-3 py-2 text-sm border border-gray-300 rounded-lg w-full max-w-[280px]"
+          />
         </div>
       </div>
 
@@ -199,8 +252,35 @@ export function ConferenciaEstoquePage() {
         Altere o saldo no campo e pressione <strong>Enter</strong> ou clique em <strong>Salvar</strong>. Ou use a planilha para ajustes em lote.
       </p>
 
+      {saveFeedback && (
+        <div
+          role="alert"
+          className={`flex items-center justify-between gap-3 px-4 py-3 rounded-lg border ${
+            saveFeedback.tipo === 'sucesso' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            {saveFeedback.tipo === 'sucesso' ? (
+              <span className="text-green-600" aria-hidden>✓</span>
+            ) : (
+              <span className="text-red-600 font-medium" aria-hidden>✕</span>
+            )}
+            {saveFeedback.codigo && <strong>{saveFeedback.codigo}</strong>}
+            <span>{saveFeedback.mensagem}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setSaveFeedback(null)}
+            className="shrink-0 text-sm underline hover:no-underline"
+            aria-label="Fechar"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
+
       <DataTable
-        data={produtos}
+        data={produtosExibidos}
         mobileTitleColumnKeys={['codigo', 'descricao']}
         columns={[
           { key: 'codigo', label: 'Código', sortable: true, sortValue: (p: ProdutoComSaldo) => p.codigo },

@@ -18,6 +18,10 @@ export interface EnvConfig {
   openai: {
     apiKey: string;
   };
+  googleMaps: {
+    apiKey: string;
+    enderecoOrigemLoja: string;
+  };
   email: {
     gmailUser: string;
     gmailAppPassword: string;
@@ -72,6 +76,10 @@ export function getEnv(env: Env): EnvConfig {
       },
       openai: {
         apiKey: getOptionalEnv(env, 'OPENAI_API_KEY', ''),
+      },
+      googleMaps: {
+        apiKey: getOptionalEnv(env, 'GOOGLE_MAPS_API_KEY', ''),
+        enderecoOrigemLoja: getOptionalEnv(env, 'ENDERECO_ORIGEM_LOJA', ''),
       },
       email: {
         gmailUser: getOptionalEnv(env, 'GMAIL_USER', ''),

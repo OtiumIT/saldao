@@ -37,6 +37,8 @@ export interface PedidoVenda {
 
 export interface PedidoVendaComCliente extends PedidoVenda {
   cliente_nome?: string | null;
+  /** Telefone/WhatsApp do cliente (para enviar resumo) */
+  cliente_fone?: string | null;
 }
 
 export interface PedidoVendaComItens extends PedidoVendaComCliente {

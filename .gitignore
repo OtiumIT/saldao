@@ -1,2 +1,8 @@
 # Dumps de migração (scripts/migrate-data-local-to-supabase.sh)
 tmp/
+
+# Env com segredos (não commitar)
+.env
+.env.local
+.env.production
+*.env.production

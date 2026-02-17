@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useVendas } from '../hooks/useVendas';
 import { Button } from '../../../components/ui/Button';
 import { DataTable } from '../../../components/ui/DataTable';
@@ -12,6 +12,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export function VendasListPage() {
+  const navigate = useNavigate();
   const { pedidos, loading, error, fetchPedidos, confirmar, marcarEntregue, cancelar } = useVendas();
 
   const handleConfirmar = async (p: PedidoVendaComCliente) => {
@@ -103,6 +104,7 @@ export function VendasListPage() {
               label: 'Ações',
               render: (p) => (
                 <div className="flex gap-2 flex-wrap">
+                  <Button variant="secondary" size="sm" onClick={() => navigate(`/vendas/${p.id}`)}>Ver</Button>
                   {p.status === 'rascunho' && (
                     <Button variant="secondary" size="sm" onClick={() => handleConfirmar(p)}>Confirmar</Button>
                   )}

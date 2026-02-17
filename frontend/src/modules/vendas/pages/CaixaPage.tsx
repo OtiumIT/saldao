@@ -2,11 +2,13 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useProdutos } from '../../estoque/hooks/useProdutos';
-import { useClients } from '../../clientes/hooks/useClients';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Combobox, type ComboboxOption } from '../../../components/ui/Combobox';
 import * as vendasService from '../services/vendas.service';
+import { imprimirPedido, abrirWhatsAppPedido } from '../lib/pedido-print-whatsapp';
+import * as clientesService from '../../clientes/services/clientes.service';
+import type { Cliente, CreateClienteRequest } from '../../clientes/types/clients.types';
 import type { CreatePedidoVendaRequest } from '../types/vendas.types';
 import type { ProdutoComSaldo } from '../../estoque/types/estoque.types';
 
@@ -37,29 +39,37 @@ export function CaixaPage() {
   const navigate = useNavigate();
   const { token } = useAuth();
   const { produtos: produtosRaw } = useProdutos(true);
-  const { clientes: clientesRaw } = useClients();
   const produtosAll = Array.isArray(produtosRaw) ? produtosRaw : [];
   const produtos = useMemo(
     () => produtosAll.filter((p) => p.tipo === 'revenda' || p.tipo === 'fabricado'),
     [produtosAll]
   );
-  const clientes = Array.isArray(clientesRaw) ? clientesRaw : [];
 
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [quantityToAdd, setQuantityToAdd] = useState(1);
   const [cliente_id, setClienteId] = useState('');
-  const [tipo_entrega, setTipoEntrega] = useState<'retirada' | 'entrega'>('retirada');
+  const [clienteNome, setClienteNome] = useState('');
+  const [identificadorCliente, setIdentificadorCliente] = useState('');
+  const [loadingCliente, setLoadingCliente] = useState(false);
+  const [errorCliente, setErrorCliente] = useState('');
+  const [showCadastroRapido, setShowCadastroRapido] = useState(false);
+  const [novoClienteNome, setNovoClienteNome] = useState('');
+  const [searchResults, setSearchResults] = useState<Cliente[] | null>(null);
+  const [loadingAcoesPedido, setLoadingAcoesPedido] = useState(false);
+  const [tipo_entrega, setTipoEntrega] = useState<'retirada' | 'entrega'>('entrega');
   const [endereco_entrega, setEnderecoEntrega] = useState('');
   const [distancia_km, setDistanciaKm] = useState('');
   const [valor_frete_manual, setValorFreteManual] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [previsao_entrega_em_dias, setPrevisaoEntregaEmDias] = useState('');
   const [descontoValor, setDescontoValor] = useState('');
-  const [showClienteEntrega, setShowClienteEntrega] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successId, setSuccessId] = useState<string | null>(null);
+  const [cep, setCep] = useState('');
+  const [loadingDistancia, setLoadingDistancia] = useState(false);
+  const [errorDistancia, setErrorDistancia] = useState('');
 
   const produtoOptions: ComboboxOption[] = useMemo(() => {
     return produtos.map((p) => {
@@ -151,15 +161,27 @@ export function CaixaPage() {
     return opt.label.toLowerCase().includes(s);
   }, []);
 
+  const clientePreenchido = cliente_id.trim() !== '';
   const canFinalize =
     validCart.length > 0 &&
+    clientePreenchido &&
     itensSemEstoqueNaoFabricados.length === 0 &&
     (!soFabricadosSemEstoque || (previsaoNum >= 1)) &&
     (tipo_entrega !== 'entrega' || (endereco_entrega.trim() && !Number.isNaN(kmNum) && kmNum >= 0)) &&
     (tipo_entrega !== 'entrega' || kmNum <= 13 || (!Number.isNaN(freteManualNum) && freteManualNum >= 0));
 
   const handleFinalize = async () => {
-    if (!canFinalize || !token) return;
+    if (!token) return;
+    if (!clientePreenchido) {
+      setError('Informe o cliente: busque por CPF, CNPJ ou WhatsApp e vincule ou cadastre um novo.');
+      return;
+    }
+    const comQuantidadeInvalida = validCart.some((i) => !(i.quantidade >= 1));
+    if (comQuantidadeInvalida) {
+      setError('Cada item precisa ter quantidade pelo menos 1. Ajuste as quantidades no carrinho.');
+      return;
+    }
+    if (!canFinalize) return;
     setError('');
     setLoading(true);
     try {
@@ -212,9 +234,17 @@ export function CaixaPage() {
       setSuccessId(created.id);
       setCart([]);
       setClienteId('');
+      setClienteNome('');
+      setIdentificadorCliente('');
+      setErrorCliente('');
+      setShowCadastroRapido(false);
+      setNovoClienteNome('');
+      setSearchResults(null);
+      setCep('');
       setEnderecoEntrega('');
       setDistanciaKm('');
       setValorFreteManual('');
+      setErrorDistancia('');
       setObservacoes('');
       setPrevisaoEntregaEmDias('');
       setDescontoValor('');
@@ -230,6 +260,181 @@ export function CaixaPage() {
     if (el) (el as HTMLInputElement).focus();
   }, [successId]);
 
+  const cepDigits = cep.replace(/\D/g, '');
+  useEffect(() => {
+    if (cepDigits.length !== 8) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${cepDigits}/json/`);
+        const data = await res.json();
+        if (cancelled || data.erro) return;
+        const partes = [data.logradouro, data.bairro, data.localidade, data.uf].filter(Boolean);
+        if (partes.length) setEnderecoEntrega(partes.join(', '));
+      } catch {
+        // silencioso
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [cepDigits]);
+
+  // Ao mudar para Entrega com cliente selecionado, preencher endereço do cadastro
+  useEffect(() => {
+    if (tipo_entrega !== 'entrega' || !cliente_id || !token) return;
+    let cancelled = false;
+    clientesService.getCliente(cliente_id, token).then((c) => {
+      if (cancelled) return;
+      const endereco = c.endereco_entrega?.trim() ?? '';
+      if (endereco) {
+        setEnderecoEntrega(endereco);
+        setErrorDistancia('');
+        vendasService.getCalcularDistancia(endereco, token).then(
+          ({ km }) => setDistanciaKm(String(km)),
+          () => setErrorDistancia('Endereço preenchido. Distância pode ser calculada manualmente ou pelo botão "Calcular km".')
+        );
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [tipo_entrega, cliente_id, token]);
+
+  const digitsOnly = (s: string) => s.replace(/\D/g, '');
+
+  const applyCliente = (cliente: Cliente) => {
+    setClienteId(cliente.id);
+    setClienteNome(cliente.nome ?? '');
+    setNovoClienteNome('');
+    setSearchResults(null);
+    setShowCadastroRapido(false);
+    const endereco = cliente.endereco_entrega?.trim() ?? '';
+    setEnderecoEntrega(endereco);
+    setErrorDistancia('');
+    if (endereco && token) {
+      vendasService.getCalcularDistancia(endereco, token).then(
+        ({ km }) => setDistanciaKm(String(km)),
+        () => setErrorDistancia('Endereço preenchido. Distância pode ser calculada manualmente ou pelo botão "Calcular km".')
+      );
+    } else if (!endereco) {
+      setDistanciaKm('');
+    }
+  };
+
+  const handleBuscarCliente = async () => {
+    const q = identificadorCliente.trim();
+    if (!q) {
+      setErrorCliente('Digite nome, CPF, CNPJ ou WhatsApp para buscar.');
+      return;
+    }
+    if (!token) return;
+    setErrorCliente('');
+    setLoadingCliente(true);
+    setShowCadastroRapido(false);
+    setSearchResults(null);
+    try {
+      const digits = digitsOnly(q);
+      // Busca exata por CPF/CNPJ/WhatsApp (só números, 10+ dígitos)
+      if (digits.length >= 10) {
+        const cliente = await clientesService.getClienteByIdentificador(identificadorCliente, token);
+        if (cliente) {
+          applyCliente(cliente);
+          setLoadingCliente(false);
+          return;
+        }
+        setShowCadastroRapido(true);
+        setNovoClienteNome('');
+        setLoadingCliente(false);
+        return;
+      }
+      // Busca por qualquer texto (nome, etc.)
+      const list = await clientesService.searchClientes(q, token);
+      if (list.length === 0) {
+        setShowCadastroRapido(true);
+        setNovoClienteNome(q);
+      } else if (list.length === 1) {
+        applyCliente(list[0]);
+      } else {
+        setSearchResults(list);
+      }
+    } catch {
+      setShowCadastroRapido(true);
+      setNovoClienteNome(q);
+    } finally {
+      setLoadingCliente(false);
+    }
+  };
+
+  const handleCadastrarCliente = async () => {
+    const nome = novoClienteNome.trim();
+    if (!nome || !token) {
+      setErrorCliente('Informe o nome do cliente.');
+      return;
+    }
+    const digits = digitsOnly(identificadorCliente);
+    const payload: CreateClienteRequest = { nome };
+    if (digits.length === 11) payload.cpf = identificadorCliente;
+    else if (digits.length === 14) payload.cnpj = identificadorCliente;
+    else payload.fone = identificadorCliente;
+    setLoadingCliente(true);
+    setErrorCliente('');
+    try {
+      const created = await clientesService.createCliente(payload, token);
+      setClienteId(created.id);
+      setClienteNome(created.nome ?? '');
+      setShowCadastroRapido(false);
+      setNovoClienteNome('');
+    } catch (e) {
+      setErrorCliente(e instanceof Error ? e.message : 'Erro ao cadastrar');
+    } finally {
+      setLoadingCliente(false);
+    }
+  };
+
+  const handleCalcularDistancia = async () => {
+    const end = endereco_entrega.trim();
+    if (!end) {
+      setErrorDistancia('Informe o endereço de entrega.');
+      return;
+    }
+    if (!token) return;
+    setErrorDistancia('');
+    setLoadingDistancia(true);
+    try {
+      const { km } = await vendasService.getCalcularDistancia(end, token);
+      setDistanciaKm(String(km));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao calcular distância';
+      setErrorDistancia(msg);
+    } finally {
+      setLoadingDistancia(false);
+    }
+  };
+
+  const handleImprimirPedido = async () => {
+    if (!successId || !token) return;
+    setLoadingAcoesPedido(true);
+    try {
+      const pedido = await vendasService.getPedidoVenda(successId, token);
+      imprimirPedido(pedido);
+    } catch {
+      setError('Não foi possível carregar o pedido para imprimir.');
+    } finally {
+      setLoadingAcoesPedido(false);
+    }
+  };
+
+  const handleWhatsAppPedido = async () => {
+    if (!successId || !token) return;
+    setLoadingAcoesPedido(true);
+    try {
+      const pedido = await vendasService.getPedidoVenda(successId, token);
+      const ok = abrirWhatsAppPedido(pedido);
+      if (!ok) setError('Cliente sem telefone cadastrado. Cadastre o WhatsApp do cliente para enviar.');
+    } catch {
+      setError('Não foi possível carregar o pedido.');
+    } finally {
+      setLoadingAcoesPedido(false);
+    }
+  };
+
   if (successId) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white flex flex-col items-center justify-center p-6">
@@ -242,13 +447,23 @@ export function CaixaPage() {
           <h2 className="text-xl font-bold text-gray-900 mb-2">Venda registrada</h2>
           <p className="text-gray-600 mb-6">Pedido confirmado e baixa no estoque realizada.</p>
           {error && <p className="text-sm text-amber-700 mb-4">{error}</p>}
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button onClick={() => { setSuccessId(null); setError(''); }} className="w-full sm:w-auto">
-              Nova venda
-            </Button>
-            <Button variant="secondary" onClick={() => navigate('/vendas')} className="w-full sm:w-auto">
-              Ver vendas
-            </Button>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2 justify-center">
+              <Button variant="secondary" onClick={handleImprimirPedido} disabled={loadingAcoesPedido} className="flex-1 min-w-[140px]">
+                {loadingAcoesPedido ? '...' : 'Imprimir pedido'}
+              </Button>
+              <Button variant="secondary" onClick={handleWhatsAppPedido} disabled={loadingAcoesPedido} className="flex-1 min-w-[140px]">
+                {loadingAcoesPedido ? '...' : 'Enviar por WhatsApp'}
+              </Button>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+              <Button onClick={() => { setSuccessId(null); setError(''); }} className="w-full sm:w-auto">
+                Nova venda
+              </Button>
+              <Button variant="secondary" onClick={() => navigate('/vendas')} className="w-full sm:w-auto">
+                Ver vendas
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -277,8 +492,10 @@ export function CaixaPage() {
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
-        <section className="flex-1 flex flex-col p-4 lg:p-6 overflow-hidden bg-slate-50">
-          <div className="space-y-3">
+        {/* Coluna esquerda: Produtos (mais estreita) */}
+        <section className="flex-1 flex flex-col min-w-0 max-w-xl min-h-0 p-4 lg:p-6 bg-slate-50 lg:border-r border-slate-200">
+          <h2 className="text-slate-900 font-semibold mb-3">Produtos</h2>
+          <div className="space-y-3 shrink-0">
             <label className="block text-sm font-medium text-slate-700">Buscar produto (código ou nome)</label>
             <div>
               <Combobox
@@ -311,19 +528,16 @@ export function CaixaPage() {
               ))}
             </div>
           </div>
-        </section>
-
-        <aside className="w-full lg:w-[440px] lg:min-w-[440px] flex flex-col bg-white border-t lg:border-t-0 lg:border-l border-slate-200 shadow-lg">
-          <div className="p-4 flex-1 flex flex-col min-h-0">
-            <h2 className="text-slate-900 font-semibold mb-3">Itens ({validCart.length})</h2>
-            <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
+          <div className="mt-4 flex-1 min-h-0 flex flex-col">
+            <p className="text-slate-600 text-sm font-medium mb-2">Itens adicionados ({validCart.length})</p>
+            <div className="flex-1 overflow-y-auto space-y-2 min-h-0 rounded-xl border border-slate-200 bg-white p-2">
               {validCart.length === 0 ? (
-                <p className="text-slate-500 text-sm">Nenhum item. Busque e adicione produtos acima.</p>
+                <p className="text-slate-500 text-sm py-4 text-center">Nenhum item. Busque e adicione produtos acima.</p>
               ) : (
                 validCart.map((item, idx) => (
                   <div
                     key={`${item.produto_id}-${idx}`}
-                    className="flex items-start gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200"
+                    className="flex items-start gap-2 p-3 rounded-lg bg-slate-50 border border-slate-200"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-slate-900 font-medium text-sm break-words leading-snug">{item.descricao}</p>
@@ -363,105 +577,186 @@ export function CaixaPage() {
                 ))
               )}
             </div>
+          </div>
+        </section>
 
+        {/* Coluna direita: Cliente e Entrega (mais larga) */}
+        <aside className="w-full flex-1 flex flex-col min-w-0 min-h-0 bg-white border-t lg:border-l border-slate-200 shadow-lg lg:min-w-[520px]">
+          <div className="p-4 flex-1 flex flex-col min-h-0 overflow-y-auto">
+            <h2 className="text-slate-900 font-semibold mb-4 text-lg">Cliente e Entrega</h2>
+
+            {/* Cliente — obrigatório */}
             <div className="mt-4 pt-4 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={() => setShowClienteEntrega((v) => !v)}
-                className="text-slate-600 hover:text-slate-900 text-sm font-medium flex items-center gap-2"
-              >
-                {showClienteEntrega ? '▼' : '▶'} Cliente e entrega
-              </button>
-              {showClienteEntrega && (
-                <div className="mt-3 space-y-3">
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">Cliente (opcional)</label>
-                    <select
-                      value={cliente_id}
-                      onChange={(e) => setClienteId(e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm"
-                    >
-                      <option value="">— Nenhum —</option>
-                      {clientes.map((c) => (
-                        <option key={c.id} value={c.id}>{c.nome}</option>
-                      ))}
-                    </select>
+              <h3 className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-amber-800 text-xs">1</span>
+                Cliente *
+              </h3>
+              <p className="text-xs text-slate-500 mb-2">Busque por nome, CPF, CNPJ ou WhatsApp; se não achar, cadastre e use.</p>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    value={identificadorCliente}
+                    onChange={(e) => { setIdentificadorCliente(e.target.value); setErrorCliente(''); setSearchResults(null); }}
+                    placeholder="Nome, CPF, CNPJ ou WhatsApp"
+                    className="flex-1"
+                    disabled={!!cliente_id}
+                    aria-label="Buscar cliente"
+                  />
+                  {!cliente_id ? (
+                    <Button type="button" variant="secondary" size="sm" onClick={handleBuscarCliente} disabled={loadingCliente}>
+                      {loadingCliente ? '...' : 'Buscar'}
+                    </Button>
+                  ) : (
+                    <Button type="button" variant="secondary" size="sm" onClick={() => { setClienteId(''); setClienteNome(''); setIdentificadorCliente(''); setShowCadastroRapido(false); setSearchResults(null); }}>
+                      Limpar
+                    </Button>
+                  )}
+                </div>
+                <Input
+                  label={cliente_id ? 'Nome (do cadastro)' : undefined}
+                  value={cliente_id ? clienteNome : novoClienteNome}
+                  onChange={(e) => setNovoClienteNome(e.target.value)}
+                  placeholder="Nome (para buscar ou cadastrar)"
+                  disabled={!!cliente_id}
+                  readOnly={!!cliente_id}
+                  aria-label="Nome do cliente"
+                />
+                {cliente_id ? (
+                  <p className="text-sm text-emerald-700 font-medium flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" aria-hidden /> {clienteNome}
+                  </p>
+                ) : searchResults && searchResults.length > 1 ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-1 max-h-40 overflow-y-auto">
+                    <p className="text-xs font-medium text-slate-600 mb-1">Escolha o cliente:</p>
+                    {searchResults.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => applyCliente(c)}
+                        className="w-full text-left px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-amber-50 hover:border-amber-300 text-sm text-slate-900"
+                      >
+                        {c.nome}{c.fone ? ` · ${c.fone}` : ''}
+                      </button>
+                    ))}
                   </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">Tipo</label>
-                    <div className="flex gap-2">
-                      {TIPO_ENTREGA_OPTIONS.map((o) => (
-                        <button
-                          key={o.value}
-                          type="button"
-                          onClick={() => setTipoEntrega(o.value)}
-                          className={`flex-1 py-2 rounded-lg text-sm font-medium ${
-                            tipo_entrega === o.value ? 'bg-amber-500 text-slate-900' : 'bg-slate-100 text-slate-700 border border-slate-300'
-                          }`}
-                        >
-                          {o.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {tipo_entrega === 'entrega' && (
-                    <>
+                ) : showCadastroRapido && (
+                  <Button type="button" size="sm" onClick={handleCadastrarCliente} disabled={loadingCliente || !novoClienteNome.trim()}>
+                    {loadingCliente ? '...' : 'Cadastrar e usar'}
+                  </Button>
+                )}
+                {errorCliente && <p className="text-red-600 text-sm">{errorCliente}</p>}
+                {!clientePreenchido && validCart.length > 0 && (
+                  <p className="text-amber-700 text-xs">Informe o cliente para poder finalizar a venda.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Entrega */}
+            <div className="mt-4 pt-4 border-t border-slate-200">
+              <h3 className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-slate-700 text-xs">2</span>
+                Entrega
+              </h3>
+              <div className="flex gap-2 mb-3">
+                {TIPO_ENTREGA_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setTipoEntrega(o.value)}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                      tipo_entrega === o.value
+                        ? 'bg-amber-500 text-slate-900 shadow-sm'
+                        : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              {tipo_entrega === 'entrega' && (
+                <div className="space-y-3 rounded-xl bg-slate-50 border border-slate-200 p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <Input
+                      label="CEP"
+                      value={cep}
+                      onChange={(e) => setCep(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                      placeholder="00000000"
+                      className="sm:col-span-1"
+                    />
+                    <div className="sm:col-span-2 flex items-end gap-2">
                       <Input
                         label="Endereço"
                         value={endereco_entrega}
-                        onChange={(e) => setEnderecoEntrega(e.target.value)}
-                        placeholder="Logradouro, número, bairro..."
+                        onChange={(e) => { setEnderecoEntrega(e.target.value); setErrorDistancia(''); }}
+                        placeholder="Ou endereço completo"
+                        className="flex-1"
                       />
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input
-                          label="Distância (km)"
-                          type="number"
-                          min={0}
-                          step={0.1}
-                          value={distancia_km}
-                          onChange={(e) => setDistanciaKm(e.target.value)}
-                          placeholder="Ex: 5"
-                        />
-                        {acimaDe13 && (
-                          <Input
-                            label="Frete (R$)"
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={valor_frete_manual}
-                            onChange={(e) => setValorFreteManual(e.target.value)}
-                          />
-                        )}
-                      </div>
-                      {!Number.isNaN(kmNum) && kmNum > 0 && freteTabela !== null && kmNum <= 13 && (
-                        <p className="text-amber-700 text-sm">Frete: R$ {freteTabela.toFixed(2)}</p>
-                      )}
-                    </>
-                  )}
-                  <Input
-                    label="Observações"
-                    value={observacoes}
-                    onChange={(e) => setObservacoes(e.target.value)}
-                    placeholder="Opcional"
-                  />
-                  {soFabricadosSemEstoque && (
-                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
-                      <label className="block text-amber-800 text-sm mb-1">Previsão de entrega (dias)</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={previsao_entrega_em_dias}
-                        onChange={(e) => setPrevisaoEntregaEmDias(e.target.value)}
-                        placeholder="Ex: 7"
-                        className="w-full h-10 px-3 rounded border border-slate-300 bg-white text-slate-900"
-                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleCalcularDistancia}
+                        disabled={loadingDistancia || !endereco_entrega.trim()}
+                        className="shrink-0 mb-0.5"
+                      >
+                        {loadingDistancia ? '...' : 'Calcular km'}
+                      </Button>
                     </div>
+                  </div>
+                  {errorDistancia && <p className="text-red-600 text-sm">{errorDistancia}</p>}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      label="Distância (km)"
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={distancia_km}
+                      onChange={(e) => setDistanciaKm(e.target.value)}
+                      placeholder="Ex: 5"
+                    />
+                    {acimaDe13 && (
+                      <Input
+                        label="Frete (R$)"
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={valor_frete_manual}
+                        onChange={(e) => setValorFreteManual(e.target.value)}
+                      />
+                    )}
+                  </div>
+                  {!Number.isNaN(kmNum) && kmNum > 0 && freteTabela !== null && kmNum <= 13 && (
+                    <p className="text-amber-700 text-sm font-medium">Frete: R$ {freteTabela.toFixed(2)}</p>
                   )}
+                </div>
+              )}
+              <Input
+                label="Observações"
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                placeholder="Opcional"
+                className="mt-2"
+              />
+              {soFabricadosSemEstoque && (
+                <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                  <label className="block text-amber-800 text-sm font-medium mb-1">Previsão de entrega (dias)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={previsao_entrega_em_dias}
+                    onChange={(e) => setPrevisaoEntregaEmDias(e.target.value)}
+                    placeholder="Ex: 7"
+                    className="w-full h-10 px-3 rounded-lg border border-amber-300 bg-white text-slate-900"
+                  />
                 </div>
               )}
             </div>
 
             <div className="mt-4 pt-4 border-t border-slate-200 space-y-2">
+              <h3 className="text-sm font-semibold text-slate-800 mb-1 flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-slate-700 text-xs">3</span>
+                Resumo
+              </h3>
               <div className="flex justify-between text-slate-600 text-sm">
                 <span>Subtotal</span>
                 <span className="tabular-nums">R$ {subtotal.toFixed(2)}</span>
@@ -497,10 +792,13 @@ export function CaixaPage() {
               {itensSemEstoqueNaoFabricados.length > 0 && (
                 <p className="text-amber-700 text-sm">Ajuste quantidades: apenas fabricados podem vender sem estoque.</p>
               )}
+              {validCart.length > 0 && !clientePreenchido && (
+                <p className="text-slate-500 text-xs">Informe o cliente acima para habilitar o botão.</p>
+              )}
               <Button
                 onClick={handleFinalize}
                 disabled={!canFinalize || loading}
-                className="w-full h-14 text-lg font-bold mt-2 bg-amber-500 hover:bg-amber-400 text-slate-900"
+                className="w-full h-14 text-lg font-bold mt-2 bg-amber-500 hover:bg-amber-400 text-slate-900 disabled:opacity-60"
               >
                 {loading ? 'Finalizando...' : 'Finalizar venda'}
               </Button>

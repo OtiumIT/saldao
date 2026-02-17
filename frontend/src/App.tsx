@@ -17,6 +17,7 @@ import { AvisosCompraPage } from './modules/avisos-compra/pages/AvisosCompraPage
 import { ProducaoBomPage } from './modules/producao/pages/ProducaoBomPage';
 import { ProducaoOrdensPage } from './modules/producao/pages/ProducaoOrdensPage';
 import { VendasListPage } from './modules/vendas/pages/VendasListPage';
+import { VendaDetailPage } from './modules/vendas/pages/VendaDetailPage';
 import { CaixaPage } from './modules/vendas/pages/CaixaPage';
 import { ContasPagarPage } from './modules/financeiro/pages/ContasPagarPage';
 import { ContasReceberPage } from './modules/financeiro/pages/ContasReceberPage';
@@ -82,6 +83,9 @@ function App() {
           <Route path="/clientes" element={<ProtectedRoute><ClientsListPage /></ProtectedRoute>} />
           <Route path="/fornecedores" element={<ProtectedRoute><SuppliersListPage /></ProtectedRoute>} />
           <Route path="/produtos" element={<ProtectedRoute><ProductsListPage /></ProtectedRoute>} />
+          <Route path="/estoque/insumos" element={<ProtectedRoute><ProductsListPage tipoFromRoute="insumos" /></ProtectedRoute>} />
+          <Route path="/estoque/revenda" element={<ProtectedRoute><ProductsListPage tipoFromRoute="revenda" /></ProtectedRoute>} />
+          <Route path="/estoque/fabricados" element={<ProtectedRoute><ProductsListPage tipoFromRoute="fabricado" /></ProtectedRoute>} />
           <Route path="/categorias-produto" element={<ProtectedRoute><CategoriasProdutoPage /></ProtectedRoute>} />
           <Route path="/cores" element={<ProtectedRoute><CoresListPage /></ProtectedRoute>} />
           <Route path="/estoque/movimentacoes" element={<ProtectedRoute><MovimentacoesPage /></ProtectedRoute>} />
@@ -92,6 +96,7 @@ function App() {
           <Route path="/producao/ordens" element={<ProtectedRoute><ProducaoOrdensPage /></ProtectedRoute>} />
           <Route path="/vendas" element={<ProtectedRoute><VendasListPage /></ProtectedRoute>} />
           <Route path="/vendas/caixa" element={<ProtectedRoute><CaixaPage /></ProtectedRoute>} />
+          <Route path="/vendas/:id" element={<ProtectedRoute><VendaDetailPage /></ProtectedRoute>} />
           <Route path="/financeiro/contas-pagar" element={<ProtectedRoute><ContasPagarPage /></ProtectedRoute>} />
           <Route path="/financeiro/contas-receber" element={<ProtectedRoute><ContasReceberPage /></ProtectedRoute>} />
           <Route path="/financeiro/resumo" element={<ProtectedRoute><ResumoFinanceiroPage /></ProtectedRoute>} />

@@ -1,5 +1,7 @@
 import type { Env } from '../../types/worker-env.js';
+import { getEnv } from '../../config/env.worker.js';
 import { useSupabaseDataAPI } from '../../config/db-mode.js';
+import { calcularDistanciaKm } from '../../lib/google-maps.js';
 import * as repo from './vendas.repository.js';
 import * as repoSupabase from './vendas.repository.supabase.js';
 
@@ -63,5 +65,17 @@ export const vendasService = {
       return repoSupabase.getItensSugeridos(env, produtoId, limit);
     }
     return repo.getItensSugeridos(produtoId, limit);
+  },
+  async calcularDistancia(env: Env, enderecoDestino: string): Promise<{ km: number }> {
+    const config = getEnv(env);
+    if (!config.googleMaps.apiKey || !config.googleMaps.enderecoOrigemLoja) {
+      throw new Error('Distância por endereço não configurada. Configure GOOGLE_MAPS_API_KEY e ENDERECO_ORIGEM_LOJA na API.');
+    }
+    const { km } = await calcularDistanciaKm(
+      config.googleMaps.apiKey,
+      config.googleMaps.enderecoOrigemLoja,
+      enderecoDestino
+    );
+    return { km };
   },
 };

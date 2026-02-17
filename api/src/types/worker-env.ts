@@ -19,6 +19,11 @@ export interface Env {
   
   // OpenAI
   OPENAI_API_KEY?: string;
+
+  // Google Maps (distância para frete)
+  GOOGLE_MAPS_API_KEY?: string;
+  /** Endereço da loja (origem para cálculo de distância) */
+  ENDERECO_ORIGEM_LOJA?: string;
   
   // Email (Gmail)
   GMAIL_USER: string;

@@ -55,6 +55,9 @@ export function Layout({ children }: LayoutProps) {
     },
 
     { name: 'Estoque e Compras', isSection: true },
+    { name: 'Estoque de Insumos', path: '/estoque/insumos' },
+    { name: 'Estoque de Revenda', path: '/estoque/revenda' },
+    { name: 'Estoque de Fábricados', path: '/estoque/fabricados' },
     { name: 'Movimentações', path: '/estoque/movimentacoes' },
     { name: 'Conferência de estoque', path: '/estoque/conferencia' },
     { name: 'Avisos de compra', path: '/avisos-compra' },

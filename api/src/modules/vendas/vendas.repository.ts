@@ -34,6 +34,7 @@ export interface PedidoVenda {
 
 export interface PedidoVendaComCliente extends PedidoVenda {
   cliente_nome?: string | null;
+  cliente_fone?: string | null;
 }
 
 export interface ItemPedidoVendaComProduto extends ItemPedidoVenda {
@@ -62,7 +63,7 @@ export async function findById(id: string): Promise<PedidoVendaComCliente | null
   if (!pool) return null;
   const { rows } = await pool.query<PedidoVendaComCliente>(
     `SELECT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.created_at, p.updated_at,
-     c.nome AS cliente_nome FROM pedidos_venda p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE p.id = $1`,
+     c.nome AS cliente_nome, c.fone AS cliente_fone FROM pedidos_venda p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE p.id = $1`,
     [id]
   );
   return rows[0] ?? null;

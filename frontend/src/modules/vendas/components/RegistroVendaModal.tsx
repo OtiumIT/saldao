@@ -1,11 +1,12 @@
 import { FormEvent, useState, useRef } from 'react';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useProdutos } from '../../estoque/hooks/useProdutos';
-import { useClients } from '../../clientes/hooks/useClients';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import * as vendasService from '../services/vendas.service';
+import * as clientesService from '../../clientes/services/clientes.service';
+import type { CreateClienteRequest } from '../../clientes/types/clients.types';
 import type { CreatePedidoVendaRequest } from '../types/vendas.types';
 import type { ProdutoComSaldo } from '../../estoque/types/estoque.types';
 
@@ -23,12 +24,15 @@ interface RegistroVendaModalProps {
 export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProps) {
   const { token } = useAuth();
   const { produtos: produtosRaw } = useProdutos(true);
-  const { clientes: clientesRaw } = useClients();
   const produtosAll = Array.isArray(produtosRaw) ? produtosRaw : [];
-  /** Na venda só entram produtos de revenda ou fabricação; insumos não são vendidos */
   const produtos = produtosAll.filter((p) => p.tipo === 'revenda' || p.tipo === 'fabricado');
-  const clientes = Array.isArray(clientesRaw) ? clientesRaw : [];
+
   const [cliente_id, setClienteId] = useState('');
+  const [clienteNome, setClienteNome] = useState('');
+  const [identificadorCliente, setIdentificadorCliente] = useState('');
+  const [loadingCliente, setLoadingCliente] = useState(false);
+  const [showCadastroRapido, setShowCadastroRapido] = useState(false);
+  const [novoClienteNome, setNovoClienteNome] = useState('');
   const [data_pedido, setDataPedido] = useState('');
   const [tipo_entrega, setTipoEntrega] = useState<'retirada' | 'entrega'>('retirada');
   const [endereco_entrega, setEnderecoEntrega] = useState('');
@@ -36,13 +40,62 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
   const [previsao_entrega_em_dias, setPrevisaoEntregaEmDias] = useState('');
   const [distancia_km, setDistanciaKm] = useState('');
   const [valor_frete_manual, setValorFreteManual] = useState('');
-  const [itens, setItens] = useState<ItemRow[]>([{ produto_id: '', quantidade: 0, preco_unitario: 0 }]);
+  const [itens, setItens] = useState<ItemRow[]>([{ produto_id: '', quantidade: 1, preco_unitario: 0 }]);
   const [loading, setLoading] = useState(false);
   const [extractLoading, setExtractLoading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const addItem = () => setItens((prev) => [...prev, { produto_id: '', quantidade: 0, preco_unitario: 0 }]);
+  const digitsOnly = (s: string) => s.replace(/\D/g, '');
+
+  const handleBuscarCliente = async () => {
+    const digits = digitsOnly(identificadorCliente);
+    if (digits.length < 10 || !token) return;
+    setLoadingCliente(true);
+    setShowCadastroRapido(false);
+    try {
+      const cliente = await clientesService.getClienteByIdentificador(identificadorCliente, token);
+      if (cliente) {
+        setClienteId(cliente.id);
+        setClienteNome(cliente.nome ?? '');
+        if (cliente.endereco_entrega?.trim()) {
+          setEnderecoEntrega(cliente.endereco_entrega.trim());
+          try {
+            const { km } = await vendasService.getCalcularDistancia(cliente.endereco_entrega.trim(), token);
+            setDistanciaKm(String(km));
+          } catch {
+            /* distância opcional; usuário pode informar manualmente */
+          }
+        }
+      } else setShowCadastroRapido(true);
+    } catch {
+      setShowCadastroRapido(true);
+    } finally {
+      setLoadingCliente(false);
+    }
+  };
+
+  const handleCadastrarCliente = async () => {
+    const nome = novoClienteNome.trim();
+    if (!nome || !token) return;
+    const digits = digitsOnly(identificadorCliente);
+    const payload: CreateClienteRequest = { nome };
+    if (digits.length === 11) payload.cpf = identificadorCliente;
+    else if (digits.length === 14) payload.cnpj = identificadorCliente;
+    else payload.fone = identificadorCliente;
+    setLoadingCliente(true);
+    try {
+      const created = await clientesService.createCliente(payload, token);
+      setClienteId(created.id);
+      setClienteNome(created.nome ?? '');
+      setShowCadastroRapido(false);
+      setNovoClienteNome('');
+    } finally {
+      setLoadingCliente(false);
+    }
+  };
+
+  const addItem = () => setItens((prev) => [...prev, { produto_id: '', quantidade: 1, preco_unitario: 0 }]);
   const removeItem = (i: number) => setItens((prev) => prev.filter((_, idx) => idx !== i));
   const updateItem = (i: number, field: keyof ItemRow, value: string | number) => {
     setItens((prev) => prev.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
@@ -64,7 +117,7 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
     return null;
   };
 
-  const validItens = itens.filter((r) => r.produto_id && r.quantidade > 0);
+  const validItens = itens.filter((r) => r.produto_id && (r.quantidade ?? 0) >= 1);
   const subtotal = itens.reduce((s, r) => s + (r.quantidade || 0) * (r.preco_unitario || 0), 0);
   const kmNum = distancia_km.trim() ? parseFloat(distancia_km) : NaN;
   const freteTabela = !Number.isNaN(kmNum) && kmNum > 0 ? calcularFretePorKm(kmNum) : null;
@@ -100,7 +153,12 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
     e.preventDefault();
     setError('');
     if (validItens.length === 0) {
-      setError('Adicione pelo menos um item');
+      setError('Adicione pelo menos um item com quantidade 1 ou mais.');
+      return;
+    }
+    const comQtdInvalida = validItens.some((r) => (r.quantidade ?? 0) < 1);
+    if (comQtdInvalida) {
+      setError('Cada item deve ter quantidade pelo menos 1.');
       return;
     }
     if (itensSemEstoqueNaoFabricados.length > 0) {
@@ -184,10 +242,7 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
         reader.readAsDataURL(file);
       });
       const extracted = await vendasService.extractVendaFromImage(base64, token);
-      if (extracted.cliente_nome) {
-        const c = clientes.find((x) => x.nome?.toLowerCase().includes(extracted.cliente_nome!.toLowerCase()));
-        if (c) setClienteId(c.id);
-      }
+      if (extracted.cliente_nome) setNovoClienteNome(extracted.cliente_nome);
       if (extracted.data_pedido) setDataPedido(extracted.data_pedido.slice(0, 10));
       if (extracted.observacoes) setObservacoes(extracted.observacoes);
       if (extracted.itens?.length) {
@@ -322,12 +377,39 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
         )}
       </div>
 
-      <Select
-        label="Cliente (opcional para retirada)"
-        options={[{ value: '', label: '— Nenhum / Retirada —' }, ...clientes.map((c) => ({ value: c.id, label: c.nome ?? '' }))]}
-        value={cliente_id}
-        onChange={(e) => setClienteId(e.target.value)}
-      />
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700 mb-1">Cliente (opcional)</label>
+        <div className="flex gap-2">
+          <Input
+            value={identificadorCliente}
+            onChange={(e) => setIdentificadorCliente(e.target.value)}
+            placeholder="CPF, CNPJ ou WhatsApp"
+            className="flex-1"
+            disabled={!!cliente_id}
+          />
+          {!cliente_id ? (
+            <Button type="button" variant="secondary" size="sm" onClick={handleBuscarCliente} disabled={loadingCliente}>
+              {loadingCliente ? '...' : 'Buscar'}
+            </Button>
+          ) : (
+            <Button type="button" variant="secondary" size="sm" onClick={() => { setClienteId(''); setClienteNome(''); setIdentificadorCliente(''); setShowCadastroRapido(false); }}>
+              Limpar
+            </Button>
+          )}
+        </div>
+        <Input
+          value={cliente_id ? clienteNome : novoClienteNome}
+          onChange={(e) => setNovoClienteNome(e.target.value)}
+          placeholder="Nome (para buscar ou cadastrar)"
+          disabled={!!cliente_id}
+        />
+        {cliente_id && <p className="text-sm text-emerald-700">Cliente vinculado: <strong>{clienteNome}</strong></p>}
+        {showCadastroRapido && (
+          <Button type="button" size="sm" onClick={handleCadastrarCliente} disabled={loadingCliente || !novoClienteNome.trim()}>
+            {loadingCliente ? '...' : 'Cadastrar e usar'}
+          </Button>
+        )}
+      </div>
       <Select
         label="Tipo"
         options={[{ value: 'retirada', label: 'Retirada' }, { value: 'entrega', label: 'Entrega' }]}

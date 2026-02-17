@@ -5,6 +5,7 @@
 import type { Env } from '../../types/worker-env.js';
 import { getDataClient, db } from '../../db/data-api.js';
 import type { Cliente, TipoCliente } from './clientes.repository.js';
+import { normalizeCpf, normalizeCnpj, normalizeDigits } from './clientes.repository.js';
 
 export async function list(env: Env): Promise<Cliente[]> {
   const client = getDataClient(env);
@@ -16,6 +17,53 @@ export async function list(env: Env): Promise<Cliente[]> {
 export async function findById(env: Env, id: string): Promise<Cliente | null> {
   const client = getDataClient(env);
   return db.findById<Cliente>(client, 'clientes', id);
+}
+
+export async function findByCpf(env: Env, cpfNormalized: string): Promise<Cliente | null> {
+  const client = getDataClient(env);
+  const results = await db.select<Cliente>(client, 'clientes', {
+    filters: { cpf: cpfNormalized },
+    limit: 1,
+  });
+  return results[0] ?? null;
+}
+
+export async function findByCnpj(env: Env, cnpjNormalized: string): Promise<Cliente | null> {
+  const client = getDataClient(env);
+  const results = await db.select<Cliente>(client, 'clientes', {
+    filters: { cnpj: cnpjNormalized },
+    limit: 1,
+  });
+  return results[0] ?? null;
+}
+
+/** Busca por nome ou qualquer texto (ILIKE). Limite 20. */
+export async function searchByQuery(env: Env, q: string): Promise<Cliente[]> {
+  const trimmed = (q ?? '').trim();
+  if (!trimmed) return [];
+  const client = getDataClient(env);
+  const pattern = `%${trimmed.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
+  const { data, error } = await client
+    .from('clientes')
+    .select('*')
+    .ilike('nome', pattern)
+    .order('nome', { ascending: true })
+    .limit(20);
+  if (error) throw new Error(error.message);
+  return (data || []) as Cliente[];
+}
+
+export async function findByIdentifier(env: Env, digits: string): Promise<Cliente | null> {
+  if (!digits || digits.length < 10) return null;
+  if (digits.length === 14) return findByCnpj(env, digits);
+  if (digits.length === 11) {
+    const byCpf = await findByCpf(env, digits);
+    if (byCpf) return byCpf;
+    const all = await list(env);
+    return all.find((c) => c.fone && normalizeDigits(c.fone) === digits) ?? null;
+  }
+  const all = await list(env);
+  return all.find((c) => c.fone && normalizeDigits(c.fone) === digits) ?? null;
 }
 
 export async function findLoja(env: Env): Promise<Cliente | null> {
@@ -31,6 +79,8 @@ export async function create(
   env: Env,
   data: {
     nome: string;
+    cpf?: string | null;
+    cnpj?: string | null;
     fone?: string;
     email?: string;
     endereco_entrega?: string;
@@ -43,13 +93,24 @@ export async function create(
 
   if (tipo === 'loja') {
     const existing = await findLoja(env);
-    if (existing) {
-      throw new Error('Já existe um cliente tipo Loja. Só pode haver um.');
-    }
+    if (existing) throw new Error('Já existe um cliente tipo Loja. Só pode haver um.');
+  }
+
+  const cpfNorm = data.cpf != null && data.cpf !== '' ? normalizeCpf(data.cpf) : null;
+  const cnpjNorm = data.cnpj != null && data.cnpj !== '' ? normalizeCnpj(data.cnpj) : null;
+  if (cpfNorm) {
+    const existing = await findByCpf(env, cpfNorm);
+    if (existing) throw new Error('Já existe um cliente com este CPF.');
+  }
+  if (cnpjNorm) {
+    const existing = await findByCnpj(env, cnpjNorm);
+    if (existing) throw new Error('Já existe um cliente com este CNPJ.');
   }
 
   const results = await db.insert<Cliente>(client, 'clientes', {
     nome: data.nome,
+    cpf: cpfNorm,
+    cnpj: cnpjNorm,
     fone: data.fone ?? null,
     email: data.email ?? null,
     endereco_entrega: data.endereco_entrega ?? null,
@@ -65,6 +126,8 @@ export async function update(
   id: string,
   data: {
     nome?: string;
+    cpf?: string | null;
+    cnpj?: string | null;
     fone?: string;
     email?: string;
     endereco_entrega?: string;
@@ -76,16 +139,33 @@ export async function update(
 
   if (data.tipo === 'loja') {
     const existing = await findLoja(env);
-    if (existing && existing.id !== id) {
-      throw new Error('Já existe um cliente tipo Loja. Só pode haver um.');
-    }
+    if (existing && existing.id !== id) throw new Error('Já existe um cliente tipo Loja. Só pode haver um.');
   }
 
   const current = await findById(env, id);
   if (!current) return null;
 
+  let cpfNorm: string | null = current.cpf ?? null;
+  let cnpjNorm: string | null = current.cnpj ?? null;
+  if (data.cpf !== undefined) {
+    cpfNorm = data.cpf != null && data.cpf !== '' ? normalizeCpf(data.cpf) : null;
+    if (cpfNorm) {
+      const existing = await findByCpf(env, cpfNorm);
+      if (existing && existing.id !== id) throw new Error('Já existe um cliente com este CPF.');
+    }
+  }
+  if (data.cnpj !== undefined) {
+    cnpjNorm = data.cnpj != null && data.cnpj !== '' ? normalizeCnpj(data.cnpj) : null;
+    if (cnpjNorm) {
+      const existing = await findByCnpj(env, cnpjNorm);
+      if (existing && existing.id !== id) throw new Error('Já existe um cliente com este CNPJ.');
+    }
+  }
+
   const updateData: Partial<Cliente> = {};
   if (data.nome !== undefined) updateData.nome = data.nome;
+  if (data.cpf !== undefined) updateData.cpf = cpfNorm;
+  if (data.cnpj !== undefined) updateData.cnpj = cnpjNorm;
   if (data.fone !== undefined) updateData.fone = data.fone ?? null;
   if (data.email !== undefined) updateData.email = data.email ?? null;
   if (data.endereco_entrega !== undefined) updateData.endereco_entrega = data.endereco_entrega ?? null;

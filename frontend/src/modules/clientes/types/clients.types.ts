@@ -3,6 +3,8 @@ export type TipoCliente = 'externo' | 'loja';
 export interface Cliente {
   id: string;
   nome: string;
+  cpf: string | null;
+  cnpj: string | null;
   fone: string | null;
   email: string | null;
   endereco_entrega: string | null;
@@ -14,6 +16,8 @@ export interface Cliente {
 
 export interface CreateClienteRequest {
   nome: string;
+  cpf?: string | null;
+  cnpj?: string | null;
   fone?: string;
   email?: string;
   endereco_entrega?: string;
@@ -23,6 +27,8 @@ export interface CreateClienteRequest {
 
 export interface UpdateClienteRequest {
   nome?: string;
+  cpf?: string | null;
+  cnpj?: string | null;
   fone?: string;
   email?: string;
   endereco_entrega?: string;

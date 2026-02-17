@@ -83,6 +83,24 @@ export const vendasRoutes = new Hono<Ctx>()
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao listar' }, 500);
     }
   })
+  .get('/calcular-distancia', async (c) => {
+    const auth = await requireAuth(c);
+    if (auth instanceof Response) return auth;
+    const endereco = c.req.query('endereco');
+    if (!endereco || typeof endereco !== 'string' || !endereco.trim()) {
+      return c.json({ error: 'endereco obrigatório' }, 400);
+    }
+    try {
+      const result = await vendasService.calcularDistancia(c.env, endereco.trim());
+      return c.json(result);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao calcular distância';
+      if (typeof msg === 'string' && (msg.includes('configurad') || msg.includes('Configure'))) {
+        return c.json({ error: msg }, 503);
+      }
+      return c.json({ error: msg }, 500);
+    }
+  })
   .get('/:id', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;

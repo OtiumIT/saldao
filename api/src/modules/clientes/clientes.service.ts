@@ -16,6 +16,18 @@ export const clientesService = {
     }
     return repo.findById(id);
   },
+  findByIdentifier: (env: Env, digits: string) => {
+    if (useSupabaseDataAPI(env)) {
+      return repoSupabase.findByIdentifier(env, digits);
+    }
+    return repo.findByIdentifier(digits);
+  },
+  searchByQuery: (env: Env, q: string) => {
+    if (useSupabaseDataAPI(env)) {
+      return repoSupabase.searchByQuery(env, q);
+    }
+    return repo.searchByQuery(q);
+  },
   findLoja: (env: Env) => {
     if (useSupabaseDataAPI(env)) {
       return repoSupabase.findLoja(env);
