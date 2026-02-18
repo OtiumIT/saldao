@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../auth/hooks/useAuth';
 import * as roteirizacaoService from '../services/roteirizacao.service';
 import { Button } from '../../../components/ui/Button';
@@ -6,7 +6,17 @@ import { DataTable } from '../../../components/ui/DataTable';
 import { Select } from '../../../components/ui/Select';
 import type { EntregaComPedido } from '../types/roteirizacao.types';
 
-const STATUS_LABEL: Record<string, string> = { pendente: 'Pendente', em_rota: 'Em rota', entregue: 'Entregue' };
+const STATUS_LABEL: Record<string, string> = {
+  sem_rota: 'Sem rota',
+  pendente: 'Pendente',
+  em_rota: 'Em rota',
+  entregue: 'Entregue',
+};
+
+/** Linha unificada: pedido com entrega (sem rota) ou entrega já na rota */
+type LinhaEntrega =
+  | { id: string; pedido_venda_id: string; data_entrega_prevista: string | null; cliente_nome: string | null; endereco_entrega: string | null; total: number; status: 'sem_rota'; entrega_id?: undefined }
+  | (EntregaComPedido & { status: 'pendente' | 'em_rota' | 'entregue'; entrega_id?: string });
 
 export function EntregasPage() {
   const { token } = useAuth();
@@ -36,6 +46,25 @@ export function EntregasPage() {
 
   useEffect(() => { load(); }, [token, filtroVeiculo, filtroData]);
 
+  /** Lista única: primeiro pendentes (sem rota), depois entregas já agendadas */
+  const listaUnificada = useMemo<LinhaEntrega[]>(() => {
+    const linhasPendentes: LinhaEntrega[] = pendentes.map((p) => ({
+      id: `pendente-${p.id}`,
+      pedido_venda_id: p.id,
+      data_entrega_prevista: null,
+      cliente_nome: p.cliente_nome,
+      endereco_entrega: p.endereco_entrega,
+      total: p.total,
+      status: 'sem_rota',
+    }));
+    const linhasEntregas: LinhaEntrega[] = entregas.map((e) => ({
+      ...e,
+      status: e.status,
+      entrega_id: e.id,
+    }));
+    return [...linhasPendentes, ...linhasEntregas];
+  }, [pendentes, entregas]);
+
   const assignar = async (pedidoId: string, veiculoId: string, dataEntrega: string) => {
     if (!token) return;
     try {
@@ -50,10 +79,10 @@ export function EntregasPage() {
     }
   };
 
-  const marcarEntregue = async (id: string) => {
+  const marcarEntregue = async (entregaId: string) => {
     if (!token) return;
     try {
-      await roteirizacaoService.marcarEntregue(token, id);
+      await roteirizacaoService.marcarEntregue(token, entregaId);
       await load();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Erro');
@@ -77,47 +106,36 @@ export function EntregasPage() {
         </div>
       </div>
 
-      {pendentes.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <h2 className="font-medium mb-2">Pedidos confirmados (entrega) sem rota</h2>
-          <ul className="space-y-2">
-            {pendentes.map((p) => (
-              <li key={p.id} className="flex flex-wrap items-center gap-2">
-                <span>{p.cliente_nome ?? 'Cliente'} – R$ {p.total.toFixed(2)} – {p.endereco_entrega?.slice(0, 40) ?? 'Sem endereço'}…</span>
-                <AssignarEntrega pedidoId={p.id} veiculos={veiculos} onAssign={assignar} />
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {loading && entregas.length === 0 ? (
+      {loading && listaUnificada.length === 0 ? (
         <p className="text-gray-500">Carregando...</p>
       ) : (
         <DataTable
-          data={entregas}
+          data={listaUnificada}
           columns={[
-            { key: 'data_entrega_prevista', label: 'Data', render: (e: EntregaComPedido) => e.data_entrega_prevista ?? '-', sortValue: (e) => e.data_entrega_prevista ?? '' },
-            { key: 'cliente_nome', label: 'Cliente', render: (e: EntregaComPedido) => e.cliente_nome ?? '-', sortValue: (e) => e.cliente_nome ?? '' },
-            { key: 'endereco_entrega', label: 'Endereço', render: (e: EntregaComPedido) => (e.endereco_entrega ?? '').slice(0, 50) + (e.endereco_entrega && e.endereco_entrega.length > 50 ? '…' : ''), sortValue: (e) => e.endereco_entrega ?? '' },
-            { key: 'status', label: 'Status', render: (e: EntregaComPedido) => STATUS_LABEL[e.status] ?? e.status, sortValue: (e) => e.status },
+            { key: 'data_entrega_prevista', label: 'Data', render: (r: LinhaEntrega) => r.data_entrega_prevista ?? '-', sortValue: (r) => r.data_entrega_prevista ?? '' },
+            { key: 'cliente_nome', label: 'Cliente', render: (r: LinhaEntrega) => r.cliente_nome ?? '-', sortValue: (r) => r.cliente_nome ?? '' },
+            { key: 'endereco_entrega', label: 'Endereço', render: (r: LinhaEntrega) => (r.endereco_entrega ?? '').slice(0, 50) + (r.endereco_entrega && r.endereco_entrega.length > 50 ? '…' : ''), sortValue: (r) => r.endereco_entrega ?? '' },
+            { key: 'total', label: 'Total', render: (r: LinhaEntrega) => (r.total != null ? `R$ ${r.total.toFixed(2)}` : '-'), sortValue: (r) => r.total ?? 0 },
+            { key: 'status', label: 'Situação', render: (r: LinhaEntrega) => STATUS_LABEL[r.status] ?? r.status, sortValue: (r) => r.status },
             {
               key: 'actions',
               label: 'Ações',
-              render: (e: EntregaComPedido) =>
-                e.status !== 'entregue' ? (
-                  <Button variant="secondary" size="sm" onClick={() => marcarEntregue(e.id)}>Marcar entregue</Button>
+              render: (r: LinhaEntrega) =>
+                r.status === 'sem_rota' ? (
+                  <AssignarEntregaInline pedidoId={r.pedido_venda_id} veiculos={veiculos} onAssign={assignar} />
+                ) : r.status !== 'entregue' && r.entrega_id ? (
+                  <Button variant="secondary" size="sm" onClick={() => marcarEntregue(r.entrega_id!)}>Marcar entregue</Button>
                 ) : null,
             },
           ]}
-          emptyMessage="Nenhuma entrega"
+          emptyMessage="Nenhuma venda com entrega no momento"
         />
       )}
     </div>
   );
 }
 
-function AssignarEntrega({
+function AssignarEntregaInline({
   pedidoId,
   veiculos,
   onAssign,
@@ -130,7 +148,7 @@ function AssignarEntrega({
   const [dataEntrega, setDataEntrega] = useState(new Date().toISOString().slice(0, 10));
 
   return (
-    <span className="flex items-center gap-2">
+    <span className="flex flex-wrap items-center gap-2">
       <select className="text-sm border rounded px-2 py-1" value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)}>
         <option value="">— Veículo —</option>
         {veiculos.map((v) => (

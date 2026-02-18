@@ -43,44 +43,140 @@ export function abrirWhatsAppPedido(pedido: PedidoVendaComItens): boolean {
   return true;
 }
 
-/** Abre janela de impressão com o conteúdo do pedido */
+/** Abre janela de impressão com o conteúdo do pedido (layout profissional) */
 export function imprimirPedido(pedido: PedidoVendaComItens): void {
+  const pedidoNum = pedido.id.slice(0, 8).toUpperCase();
+  const clienteFone = (pedido as { cliente_fone?: string | null }).cliente_fone;
+  const subtotal = (pedido.valor_frete != null && Number(pedido.valor_frete) > 0)
+    ? Number(pedido.total) - Number(pedido.valor_frete)
+    : Number(pedido.total);
+
   const itens = (pedido.itens ?? [])
     .map(
       (i) =>
-        `<tr><td>${escapeHtml(i.produto_descricao ?? i.produto_codigo ?? '')}</td><td style="text-align:right">${i.quantidade}</td><td style="text-align:right">R$ ${Number(i.preco_unitario).toFixed(2)}</td><td style="text-align:right">R$ ${Number(i.total_item).toFixed(2)}</td></tr>`
+        `<tr>
+          <td>${escapeHtml((i.produto_codigo ? i.produto_codigo + ' — ' : '') + (i.produto_descricao ?? ''))}</td>
+          <td class="num">${i.quantidade}</td>
+          <td class="num">R$ ${Number(i.preco_unitario).toFixed(2)}</td>
+          <td class="num">R$ ${Number(i.total_item).toFixed(2)}</td>
+        </tr>`
     )
     .join('');
 
+  const statusLabel: Record<string, string> = { rascunho: 'Rascunho', confirmado: 'Confirmado', entregue: 'Entregue', cancelado: 'Cancelado' };
+  const status = statusLabel[pedido.status] ?? pedido.status;
+
   const html = `
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <title>Pedido ${escapeHtml(pedido.id.slice(0, 8))}</title>
+  <title>Pedido ${escapeHtml(pedidoNum)} — Saldão de Móveis Jerusalém</title>
   <style>
-    body { font-family: sans-serif; font-size: 12px; padding: 16px; max-width: 600px; margin: 0 auto; }
-    h1 { font-size: 16px; margin-bottom: 8px; }
-    table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
-    th { background: #f5f5f5; }
-    .total { font-weight: bold; font-size: 14px; margin-top: 8px; }
-    .obs { margin-top: 12px; color: #555; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-size: 11pt;
+      line-height: 1.35;
+      color: #1a1a1a;
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 12mm 15mm;
+      background: #fff;
+    }
+    @media print {
+      body { padding: 10mm 12mm; }
+      .no-print { display: none !important; }
+      .section { break-inside: avoid; }
+    }
+    .header {
+      border-bottom: 2px solid #1a1a1a;
+      padding-bottom: 10px;
+      margin-bottom: 14px;
+    }
+    .empresa { font-size: 18pt; font-weight: 700; letter-spacing: 0.02em; margin: 0 0 2px 0; }
+    .doc-title { font-size: 11pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #444; margin: 0 0 8px 0; }
+    .doc-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 10pt; color: #555; }
+    .section {
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+    }
+    .section-title { font-size: 9pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #555; margin: 0 0 8px 0; padding-bottom: 4px; border-bottom: 1px solid #ddd; }
+    .section .row { display: flex; gap: 8px; margin-bottom: 4px; }
+    .section .row:last-child { margin-bottom: 0; }
+    .section .label { min-width: 100px; color: #555; font-weight: 500; }
+    .section .value { flex: 1; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 10pt; }
+    thead th { text-align: left; padding: 8px 10px; background: #1a1a1a; color: #fff; font-weight: 600; }
+    thead th.num { text-align: right; }
+    tbody td { padding: 6px 10px; border-bottom: 1px solid #e5e5e5; }
+    tbody td.num { text-align: right; }
+    tbody tr:nth-child(even) { background: #fafafa; }
+    .totais { margin-top: 12px; text-align: right; }
+    .totais p { margin: 4px 0; }
+    .total-geral { font-size: 14pt; font-weight: 700; margin-top: 8px; padding-top: 8px; border-top: 2px solid #1a1a1a; }
+    .footer { margin-top: 20px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 9pt; color: #666; text-align: center; }
+    .num { font-variant-numeric: tabular-nums; }
   </style>
 </head>
 <body>
-  <h1>Pedido de venda — ${escapeHtml(pedido.data_pedido)}</h1>
-  <p><strong>Cliente:</strong> ${escapeHtml(pedido.cliente_nome ?? '—')}</p>
-  <p><strong>Entrega:</strong> ${pedido.tipo_entrega === 'entrega' ? 'Sim' : 'Retirada'}</p>
-  ${pedido.endereco_entrega ? `<p><strong>Endereço:</strong> ${escapeHtml(pedido.endereco_entrega)}</p>` : ''}
-  <table>
-    <thead><tr><th>Produto</th><th style="text-align:right">Qtd</th><th style="text-align:right">Preço un.</th><th style="text-align:right">Total</th></tr></thead>
-    <tbody>${itens}</tbody>
-  </table>
-  ${pedido.valor_frete != null && Number(pedido.valor_frete) > 0 ? `<p><strong>Frete:</strong> R$ ${Number(pedido.valor_frete).toFixed(2)}</p>` : ''}
-  <p class="total">Total: R$ ${Number(pedido.total).toFixed(2)}</p>
-  ${pedido.observacoes ? `<p class="obs"><strong>Observações:</strong> ${escapeHtml(pedido.observacoes)}</p>` : ''}
-  <p style="margin-top: 24px; font-size: 10px; color: #888;">Saldão de Móveis Jerusalém — Pedido #${pedido.id.slice(0, 8)}</p>
+  <header class="header">
+    <p class="empresa">Saldão de Móveis Jerusalém</p>
+    <p class="doc-title">Pedido de venda</p>
+    <div class="doc-meta">
+      <span><strong>Nº do pedido:</strong> ${escapeHtml(pedidoNum)}</span>
+      <span><strong>Data:</strong> ${escapeHtml(pedido.data_pedido)}</span>
+      <span><strong>Status:</strong> ${escapeHtml(status)}</span>
+    </div>
+  </header>
+
+  <section class="section">
+    <h2 class="section-title">Dados do cliente</h2>
+    <div class="row"><span class="label">Nome</span><span class="value">${escapeHtml(pedido.cliente_nome ?? '—')}</span></div>
+    ${clienteFone ? `<div class="row"><span class="label">Telefone</span><span class="value">${escapeHtml(clienteFone)}</span></div>` : ''}
+  </section>
+
+  <section class="section">
+    <h2 class="section-title">Dados da venda</h2>
+    <div class="row"><span class="label">Data do pedido</span><span class="value">${escapeHtml(pedido.data_pedido)}</span></div>
+    <div class="row"><span class="label">Status</span><span class="value">${escapeHtml(status)}</span></div>
+    ${pedido.observacoes ? `<div class="row"><span class="label">Observações</span><span class="value">${escapeHtml(pedido.observacoes)}</span></div>` : ''}
+  </section>
+
+  <section class="section">
+    <h2 class="section-title">Entrega</h2>
+    <div class="row"><span class="label">Tipo</span><span class="value">${pedido.tipo_entrega === 'entrega' ? 'Entrega' : 'Retirada no local'}</span></div>
+    ${pedido.endereco_entrega ? `<div class="row"><span class="label">Endereço</span><span class="value">${escapeHtml(pedido.endereco_entrega)}</span></div>` : ''}
+    ${pedido.distancia_km != null && Number(pedido.distancia_km) > 0 ? `<div class="row"><span class="label">Distância</span><span class="value">${Number(pedido.distancia_km)} km</span></div>` : ''}
+    ${pedido.valor_frete != null && Number(pedido.valor_frete) > 0 ? `<div class="row"><span class="label">Valor do frete</span><span class="value">R$ ${Number(pedido.valor_frete).toFixed(2)}</span></div>` : ''}
+    ${pedido.previsao_entrega_em_dias != null && pedido.previsao_entrega_em_dias > 0 ? `<div class="row"><span class="label">Previsão de entrega</span><span class="value">${pedido.previsao_entrega_em_dias} dia(s)</span></div>` : ''}
+  </section>
+
+  <section class="section">
+    <h2 class="section-title">Itens do pedido</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Produto</th>
+          <th class="num">Qtd</th>
+          <th class="num">Preço un.</th>
+          <th class="num">Total</th>
+        </tr>
+      </thead>
+      <tbody>${itens}</tbody>
+    </table>
+    <div class="totais">
+      ${pedido.valor_frete != null && Number(pedido.valor_frete) > 0 ? `<p>Subtotal (itens): R$ ${subtotal.toFixed(2)}</p><p>Frete: R$ ${Number(pedido.valor_frete).toFixed(2)}</p>` : ''}
+      <p class="total-geral">Total: R$ ${Number(pedido.total).toFixed(2)}</p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    Saldão de Móveis Jerusalém — Pedido ${escapeHtml(pedidoNum)} — Impresso em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+  </footer>
 </body>
 </html>`;
 

@@ -142,6 +142,7 @@ export async function listPedidosPendentesEntrega(env: Env): Promise<Array<{ id:
     'pedidos_venda',
     {
       filters: { tipo_entrega: 'entrega', status: 'confirmado' },
+      orderBy: { column: 'data_pedido', ascending: false },
     }
   );
 
