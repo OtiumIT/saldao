@@ -180,16 +180,65 @@ export function imprimirPedido(pedido: PedidoVendaComItens): void {
 </body>
 </html>`;
 
-  const win = window.open('', '_blank');
-  if (!win) return;
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  win.onload = () => {
-    win.print();
-    win.onafterprint = () => win.close();
+  // No Android, window.open() costuma travar em "Preparando Visualização".
+  // Usar iframe na mesma página evita popup e o conteúdo já fica pronto para imprimir.
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('title', 'Impressão do pedido');
+  iframe.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none;background:#fff;z-index:999999;';
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:999998;background:rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:stretch;';
+  const toolbar = document.createElement('div');
+  toolbar.style.cssText = 'flex:0 0 auto;padding:10px 12px;background:#1a1a1a;color:#fff;display:flex;gap:10px;align-items:center;justify-content:flex-end;';
+  const btnPrint = document.createElement('button');
+  btnPrint.textContent = 'Imprimir';
+  btnPrint.type = 'button';
+  btnPrint.style.cssText = 'padding:8px 16px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;';
+  const btnClose = document.createElement('button');
+  btnClose.textContent = 'Fechar';
+  btnClose.type = 'button';
+  btnClose.style.cssText = 'padding:8px 16px;background:#555;color:#fff;border:none;border-radius:6px;cursor:pointer;';
+
+  function removeOverlay() {
+    overlay.remove();
+    iframe.remove();
+  }
+
+  btnPrint.onclick = () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch {
+      // Fallback: tentar janela nova só em desktop
+      const w = window.open('', '_blank');
+      if (w) {
+        w.document.write(html);
+        w.document.close();
+        w.print();
+        w.onafterprint = () => w.close();
+      }
+    }
   };
-  setTimeout(() => win.print(), 250);
+  btnClose.onclick = removeOverlay;
+
+  toolbar.append(btnPrint, btnClose);
+  overlay.append(toolbar, iframe);
+  document.body.appendChild(overlay);
+
+  const doc = iframe.contentWindow?.document;
+  if (!doc) {
+    removeOverlay();
+    return;
+  }
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  // Pequeno delay para o iframe renderizar antes de poder imprimir (evita travamento no Android)
+  iframe.onload = () => {
+    btnPrint.disabled = false;
+  };
+  btnPrint.disabled = true;
 }
 
 function escapeHtml(s: string): string {
