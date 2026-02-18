@@ -121,7 +121,7 @@ export function VendaDetailPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" onClick={() => imprimirPedido(pedido)}>Imprimir pedido</Button>
+        <Button variant="secondary" onClick={() => imprimirPedido(pedido)}>Baixar PDF</Button>
         <Button variant="secondary" onClick={() => { if (!abrirWhatsAppPedido(pedido)) alert('Cliente sem telefone cadastrado.'); }}>Enviar por WhatsApp</Button>
         <Link to="/vendas"><Button variant="secondary">Voltar às vendas</Button></Link>
       </div>

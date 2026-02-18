@@ -6,7 +6,7 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Combobox, type ComboboxOption } from '../../../components/ui/Combobox';
 import * as vendasService from '../services/vendas.service';
-import { imprimirPedido, abrirWhatsAppPedido } from '../lib/pedido-print-whatsapp';
+import { baixarPdfPedido, abrirWhatsAppPedido } from '../lib/pedido-print-whatsapp';
 import * as clientesService from '../../clientes/services/clientes.service';
 import type { Cliente, CreateClienteRequest } from '../../clientes/types/clients.types';
 import type { CreatePedidoVendaRequest } from '../types/vendas.types';
@@ -413,9 +413,9 @@ export function CaixaPage() {
     setLoadingAcoesPedido(true);
     try {
       const pedido = await vendasService.getPedidoVenda(successId, token);
-      imprimirPedido(pedido);
-    } catch {
-      setError('Não foi possível carregar o pedido para imprimir.');
+      await baixarPdfPedido(pedido);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Não foi possível gerar o PDF.');
     } finally {
       setLoadingAcoesPedido(false);
     }
@@ -450,7 +450,7 @@ export function CaixaPage() {
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-2 justify-center">
               <Button variant="secondary" onClick={handleImprimirPedido} disabled={loadingAcoesPedido} className="flex-1 min-w-[140px]">
-                {loadingAcoesPedido ? '...' : 'Imprimir pedido'}
+                {loadingAcoesPedido ? '...' : 'Baixar PDF'}
               </Button>
               <Button variant="secondary" onClick={handleWhatsAppPedido} disabled={loadingAcoesPedido} className="flex-1 min-w-[140px]">
                 {loadingAcoesPedido ? '...' : 'Enviar por WhatsApp'}

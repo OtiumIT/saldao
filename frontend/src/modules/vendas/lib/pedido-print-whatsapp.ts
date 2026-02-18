@@ -1,4 +1,6 @@
 import type { PedidoVendaComItens } from '../types/vendas.types';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 /** Normaliza fone para link WhatsApp Brasil (55 + DDD + número) */
 export function whatsappNumber(fone: string | null | undefined): string | null {
@@ -43,8 +45,8 @@ export function abrirWhatsAppPedido(pedido: PedidoVendaComItens): boolean {
   return true;
 }
 
-/** Abre janela de impressão com o conteúdo do pedido (layout profissional) */
-export function imprimirPedido(pedido: PedidoVendaComItens): void {
+/** Monta o HTML do pedido (documento completo) e o fragmento para renderização (estilo + corpo). */
+function buildPedidoHtml(pedido: PedidoVendaComItens): { html: string; fragment: string } {
   const pedidoNum = pedido.id.slice(0, 8).toUpperCase();
   const clienteFone = (pedido as { cliente_fone?: string | null }).cliente_fone;
   const subtotal = (pedido.valor_frete != null && Number(pedido.valor_frete) > 0)
@@ -83,11 +85,6 @@ export function imprimirPedido(pedido: PedidoVendaComItens): void {
       margin: 0 auto;
       padding: 12mm 15mm;
       background: #fff;
-    }
-    @media print {
-      body { padding: 10mm 12mm; }
-      .no-print { display: none !important; }
-      .section { break-inside: avoid; }
     }
     .header {
       border-bottom: 2px solid #1a1a1a;
@@ -175,70 +172,67 @@ export function imprimirPedido(pedido: PedidoVendaComItens): void {
   </section>
 
   <footer class="footer">
-    Saldão de Móveis Jerusalém — Pedido ${escapeHtml(pedidoNum)} — Impresso em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+    Saldão de Móveis Jerusalém — Pedido ${escapeHtml(pedidoNum)} — ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
   </footer>
 </body>
 </html>`;
 
-  // No Android, window.open() costuma travar em "Preparando Visualização".
-  // Usar iframe na mesma página evita popup e o conteúdo já fica pronto para imprimir.
-  const iframe = document.createElement('iframe');
-  iframe.setAttribute('title', 'Impressão do pedido');
-  iframe.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none;background:#fff;z-index:999999;';
+  const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/);
+  let styleBlock = styleMatch ? styleMatch[1] : '';
+  styleBlock = styleBlock.replace(/\bbody\s*\{/g, '.pedido-pdf-body {');
+  const bodyContent = bodyMatch ? bodyMatch[1] : html;
+  const fragment = `<style>${styleBlock}</style><div class="pedido-pdf-body">${bodyContent}</div>`;
+  return { html, fragment };
+}
 
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:999998;background:rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:stretch;';
-  const toolbar = document.createElement('div');
-  toolbar.style.cssText = 'flex:0 0 auto;padding:10px 12px;background:#1a1a1a;color:#fff;display:flex;gap:10px;align-items:center;justify-content:flex-end;';
-  const btnPrint = document.createElement('button');
-  btnPrint.textContent = 'Imprimir';
-  btnPrint.type = 'button';
-  btnPrint.style.cssText = 'padding:8px 16px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;';
-  const btnClose = document.createElement('button');
-  btnClose.textContent = 'Fechar';
-  btnClose.type = 'button';
-  btnClose.style.cssText = 'padding:8px 16px;background:#555;color:#fff;border:none;border-radius:6px;cursor:pointer;';
+/** Gera PDF do pedido e inicia o download. Funciona em desktop e mobile. */
+export async function baixarPdfPedido(pedido: PedidoVendaComItens): Promise<void> {
+  const pedidoNum = pedido.id.slice(0, 8).toUpperCase();
+  const { fragment } = buildPedidoHtml(pedido);
 
-  function removeOverlay() {
-    overlay.remove();
-    iframe.remove();
-  }
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:40px;';
+  wrap.innerHTML = fragment;
+  document.body.appendChild(wrap);
 
-  btnPrint.onclick = () => {
-    try {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-    } catch {
-      // Fallback: tentar janela nova só em desktop
-      const w = window.open('', '_blank');
-      if (w) {
-        w.document.write(html);
-        w.document.close();
-        w.print();
-        w.onafterprint = () => w.close();
-      }
+  try {
+    const canvas = await html2canvas(wrap, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pdfWidth = (pdf as unknown as { internal: { pageSize: { getWidth: () => number } } }).internal.pageSize.getWidth();
+    const pdfHeight = (pdf as unknown as { internal: { pageSize: { getHeight: () => number } } }).internal.pageSize.getHeight();
+    const imgWidth = pdfWidth;
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+    let position = 0;
+
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    position -= pdfHeight;
+
+    while (position > -imgHeight) {
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      position -= pdfHeight;
     }
-  };
-  btnClose.onclick = removeOverlay;
 
-  toolbar.append(btnPrint, btnClose);
-  overlay.append(toolbar, iframe);
-  document.body.appendChild(overlay);
-
-  const doc = iframe.contentWindow?.document;
-  if (!doc) {
-    removeOverlay();
-    return;
+    pdf.save(`pedido-${pedidoNum}.pdf`);
+  } finally {
+    wrap.remove();
   }
-  doc.open();
-  doc.write(html);
-  doc.close();
+}
 
-  // Pequeno delay para o iframe renderizar antes de poder imprimir (evita travamento no Android)
-  iframe.onload = () => {
-    btnPrint.disabled = false;
-  };
-  btnPrint.disabled = true;
+/** Gera PDF e inicia download (alias para manter compatibilidade com botão "Imprimir pedido"). */
+export function imprimirPedido(pedido: PedidoVendaComItens): void {
+  baixarPdfPedido(pedido).catch((err) => {
+    alert(err instanceof Error ? err.message : 'Erro ao gerar PDF');
+  });
 }
 
 function escapeHtml(s: string): string {
