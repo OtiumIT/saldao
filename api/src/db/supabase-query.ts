@@ -193,7 +193,7 @@ export async function update<T>(
     .update(data)
     .eq('id', id)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     throw new Error(`Supabase update error: ${error.message}`);

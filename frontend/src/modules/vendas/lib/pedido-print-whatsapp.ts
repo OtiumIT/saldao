@@ -75,47 +75,48 @@ function buildPedidoHtml(pedido: PedidoVendaComItens): { html: string; fragment:
   <meta charset="utf-8">
   <title>Pedido ${escapeHtml(pedidoNum)} — Saldão de Móveis Jerusalém</title>
   <style>
+    /* Economia de tinta: sem preenchimento preto, fontes finas (300/400) */
     * { box-sizing: border-box; }
     body {
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-weight: 300;
       font-size: 11pt;
       line-height: 1.35;
-      color: #1a1a1a;
+      color: #333;
       max-width: 210mm;
       margin: 0 auto;
       padding: 12mm 15mm;
       background: #fff;
     }
     .header {
-      border-bottom: 2px solid #1a1a1a;
+      border-bottom: 1px solid #999;
       padding-bottom: 10px;
       margin-bottom: 14px;
     }
-    .empresa { font-size: 18pt; font-weight: 700; letter-spacing: 0.02em; margin: 0 0 2px 0; }
-    .doc-title { font-size: 11pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #444; margin: 0 0 8px 0; }
-    .doc-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 10pt; color: #555; }
+    .empresa { font-size: 18pt; font-weight: 400; letter-spacing: 0.02em; margin: 0 0 2px 0; }
+    .doc-title { font-size: 11pt; font-weight: 400; text-transform: uppercase; letter-spacing: 0.05em; color: #555; margin: 0 0 8px 0; }
+    .doc-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 10pt; color: #555; font-weight: 300; }
+    .doc-meta strong { font-weight: 400; }
     .section {
       margin-bottom: 14px;
       padding: 10px 12px;
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
+      border: 1px solid #ccc;
       border-radius: 4px;
     }
-    .section-title { font-size: 9pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #555; margin: 0 0 8px 0; padding-bottom: 4px; border-bottom: 1px solid #ddd; }
+    .section-title { font-size: 9pt; font-weight: 400; text-transform: uppercase; letter-spacing: 0.04em; color: #555; margin: 0 0 8px 0; padding-bottom: 4px; border-bottom: 1px solid #ddd; }
     .section .row { display: flex; gap: 8px; margin-bottom: 4px; }
     .section .row:last-child { margin-bottom: 0; }
-    .section .label { min-width: 100px; color: #555; font-weight: 500; }
-    .section .value { flex: 1; }
-    table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 10pt; }
-    thead th { text-align: left; padding: 8px 10px; background: #1a1a1a; color: #fff; font-weight: 600; }
+    .section .label { min-width: 100px; color: #555; font-weight: 400; }
+    .section .value { flex: 1; font-weight: 300; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 10pt; font-weight: 300; }
+    thead th { text-align: left; padding: 8px 10px; border-bottom: 1px solid #333; font-weight: 400; }
     thead th.num { text-align: right; }
-    tbody td { padding: 6px 10px; border-bottom: 1px solid #e5e5e5; }
+    tbody td { padding: 6px 10px; border-bottom: 1px solid #ddd; }
     tbody td.num { text-align: right; }
-    tbody tr:nth-child(even) { background: #fafafa; }
     .totais { margin-top: 12px; text-align: right; }
-    .totais p { margin: 4px 0; }
-    .total-geral { font-size: 14pt; font-weight: 700; margin-top: 8px; padding-top: 8px; border-top: 2px solid #1a1a1a; }
-    .footer { margin-top: 20px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 9pt; color: #666; text-align: center; }
+    .totais p { margin: 4px 0; font-weight: 300; }
+    .total-geral { font-size: 14pt; font-weight: 400; margin-top: 8px; padding-top: 8px; border-top: 1px solid #333; }
+    .footer { margin-top: 20px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 9pt; color: #666; text-align: center; font-weight: 300; }
     .num { font-variant-numeric: tabular-nums; }
   </style>
 </head>

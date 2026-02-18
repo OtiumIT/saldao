@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/hooks/useAuth';
 import * as roteirizacaoService from '../services/roteirizacao.service';
 import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
+import { imprimirRota } from '../lib/rota-print';
 import type { EntregaComPedido, Veiculo } from '../types/roteirizacao.types';
 
 type Pendente = { id: string; cliente_nome: string | null; endereco_entrega: string | null; total: number };
@@ -421,38 +422,49 @@ export function EntregasPage() {
               const entregasDoDia = entregasAgendadas.filter((e) => e.data_entrega_prevista === data);
               const rotasPorVeiculo = getRotasPorVeiculo(entregasDoDia);
               return (
-                <section key={data}>
+                <section key={data} className="w-full">
                   <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4 md:mb-5">
                     {formatarData(data)}
                   </h2>
-                  <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="flex flex-col gap-6 w-full">
                     {Array.from(rotasPorVeiculo.entries()).map(([veiculoId, lista]) => (
                       <div
                         key={`${data}-${veiculoId}`}
-                        className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
+                        className="w-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
                       >
                         <div className="px-5 md:px-6 py-5 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <h3 className="font-semibold text-gray-900 text-base md:text-lg">
                             {nomeVeiculo(veiculoId)} — {lista.length} parada(s)
                           </h3>
-                          <Button
-                            variant="secondary"
-                            size="md"
-                            onClick={() => sugerirOrdem(veiculoId, data)}
-                            disabled={
-                              reordenando === veiculoId ||
-                              lista.length < 2 ||
-                              veiculoId === 'sem-veiculo'
-                            }
-                          >
-                            {reordenando === veiculoId ? '...' : 'Sugerir ordem'}
-                          </Button>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              variant="secondary"
+                              size="md"
+                              onClick={() => imprimirRota(data, nomeVeiculo(veiculoId), lista)}
+                              disabled={lista.length === 0}
+                              title="Imprimir rota (1ª parada, 2ª parada...)"
+                            >
+                              Imprimir rota
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="md"
+                              onClick={() => sugerirOrdem(veiculoId, data)}
+                              disabled={
+                                reordenando === veiculoId ||
+                                lista.length < 2 ||
+                                veiculoId === 'sem-veiculo'
+                              }
+                            >
+                              {reordenando === veiculoId ? '...' : 'Sugerir ordem'}
+                            </Button>
+                          </div>
                         </div>
-                        <ol className="divide-y divide-gray-100">
+                        <ol className="divide-y divide-gray-100 w-full">
                           {lista.map((e, i) => (
                             <li
                               key={e.id}
-                              className="px-5 md:px-6 py-5 flex flex-col sm:flex-row sm:items-start gap-4"
+                              className="w-full px-5 md:px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6"
                             >
                               <div className="flex items-start gap-4 flex-1 min-w-0">
                                 <span className="flex-shrink-0 w-10 h-10 rounded-xl bg-brand-gold/20 text-brand-black font-bold flex items-center justify-center text-base">
@@ -464,7 +476,7 @@ export function EntregasPage() {
                                   <p className="text-sm text-gray-500 mt-1 font-medium">R$ {(e.total ?? 0).toFixed(2)}</p>
                                 </div>
                               </div>
-                              <div className="flex flex-wrap items-center gap-3 ml-14 sm:ml-0">
+                              <div className="flex flex-wrap items-center gap-3 ml-14 sm:ml-0 sm:flex-shrink-0">
                                 <div className="flex gap-2" role="group" aria-label="Ordenar">
                                   <button
                                     onClick={() => moverEntrega(e, 'cima')}
