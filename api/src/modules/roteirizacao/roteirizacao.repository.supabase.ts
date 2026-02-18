@@ -259,6 +259,13 @@ export async function sugerirOrdemRota(env: Env, veiculoId: string, dataEntrega:
     .map((e) => e.id);
 }
 
+export async function deleteEntrega(env: Env, id: string): Promise<boolean> {
+  const client = getDataClient(env);
+  const { error } = await client.from('entregas').delete().eq('id', id);
+  if (error) throw new Error(`Supabase delete error: ${error.message}`);
+  return true;
+}
+
 export async function aplicarOrdemRota(env: Env, entregaIdsOrdenados: string[]): Promise<void> {
   const client = getDataClient(env);
   for (let i = 0; i < entregaIdsOrdenados.length; i++) {

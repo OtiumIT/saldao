@@ -17,7 +17,14 @@ export async function listEntregas(
   token: string,
   params?: { veiculo_id?: string; data?: string; status?: string }
 ): Promise<EntregaComPedido[]> {
-  const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+  const cleanParams = params
+    ? Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && v !== '')
+      )
+    : {};
+  const q = Object.keys(cleanParams).length
+    ? new URLSearchParams(cleanParams as Record<string, string>).toString()
+    : '';
   return apiClient.get<EntregaComPedido[]>(`/api/roteirizacao/entregas${q ? `?${q}` : ''}`, token);
 }
 
@@ -42,6 +49,10 @@ export async function updateEntrega(
 
 export async function marcarEntregue(token: string, id: string): Promise<EntregaComPedido> {
   return apiClient.post<EntregaComPedido>(`/api/roteirizacao/entregas/${id}/entregue`, {}, token);
+}
+
+export async function removeEntrega(token: string, id: string): Promise<void> {
+  await apiClient.delete(`/api/roteirizacao/entregas/${id}`, token);
 }
 
 export interface MarcarInoperanteResponse {

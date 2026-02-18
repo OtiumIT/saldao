@@ -279,6 +279,14 @@ export async function sugerirOrdemRota(veiculoId: string, dataEntrega: string): 
   return rows.map((r) => r.id);
 }
 
+/** Remove entrega (pedido volta para pendentes). */
+export async function deleteEntrega(id: string): Promise<boolean> {
+  const pool = getPool();
+  if (!pool) return false;
+  const { rowCount } = await pool.query('DELETE FROM entregas WHERE id = $1', [id]);
+  return (rowCount ?? 0) > 0;
+}
+
 /** Atualiza ordem_na_rota das entregas conforme a posição na lista (1, 2, 3...). */
 export async function aplicarOrdemRota(entregaIdsOrdenados: string[]): Promise<void> {
   const pool = getPool();

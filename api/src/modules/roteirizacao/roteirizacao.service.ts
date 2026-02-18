@@ -58,6 +58,12 @@ export const roteirizacaoService = {
     }
     return repo.marcarEntregue(id);
   },
+  deleteEntrega: (env: Env, id: string) => {
+    if (useSupabaseDataAPI(env)) {
+      return repoSupabase.deleteEntrega(env, id);
+    }
+    return repo.deleteEntrega(id);
+  },
   listEntregasAfetadasPorVeiculoInoperante: (env: Env, veiculoId: string) => {
     if (useSupabaseDataAPI(env)) {
       return repoSupabase.listEntregasAfetadasPorVeiculoInoperante(env, veiculoId);

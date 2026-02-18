@@ -110,6 +110,13 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
     if (!updated) return c.json({ error: 'Entrega não encontrada' }, 404);
     return c.json(updated);
   })
+  .delete('/entregas/:id', async (c) => {
+    const auth = await requireAuth(c);
+    if (auth instanceof Response) return auth;
+    const ok = await roteirizacaoService.deleteEntrega(c.env, c.req.param('id'));
+    if (!ok) return c.json({ error: 'Entrega não encontrada' }, 404);
+    return c.json({ ok: true });
+  })
   .patch('/veiculos/:id/inoperante', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
