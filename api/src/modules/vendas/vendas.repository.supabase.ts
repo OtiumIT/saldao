@@ -14,6 +14,8 @@ import type {
   TipoEntrega,
   PrecoSugerido,
   ItemSugerido,
+  LinhaRelatorioVendas,
+  RelatorioVendasResult,
 } from './vendas.repository.js';
 import * as movimentacoesRepo from '../estoque/movimentacoes.repository.supabase.js';
 
@@ -449,4 +451,106 @@ export async function getItensSugeridos(env: Env, produtoId: string, limit = 5):
       vezes_junto: contagem.get(p.id) || 0,
     }))
     .sort((a, b) => b.vezes_junto - a.vezes_junto);
+}
+
+export async function getRelatorioVendas(
+  env: Env,
+  filtros: { data_inicio: string; data_fim: string; fornecedor_id?: string | null; produto_id?: string | null }
+): Promise<RelatorioVendasResult> {
+  const client = getDataClient(env);
+  const pedidos = await db.select<PedidoVenda & { data_pedido: string }>(client, 'pedidos_venda', {
+    filters: { data_pedido: `>=${filtros.data_inicio}`, status: ['confirmado', 'entregue'] },
+    orderBy: { column: 'data_pedido', ascending: true },
+  });
+  const pedidosNoPeriodo = pedidos.filter((p) => p.data_pedido <= filtros.data_fim);
+  const pedidoIds = pedidosNoPeriodo.map((p) => p.id);
+  if (pedidoIds.length === 0) {
+    return {
+      periodo: { data_inicio: filtros.data_inicio, data_fim: filtros.data_fim },
+      resumo: { total_pedidos: 0, total_valor: 0, total_linhas: 0 },
+      linhas: [],
+    };
+  }
+  const itens = await db.select<
+    ItemPedidoVenda & { quantidade: string; preco_unitario: string; total_item: string }
+  >(client, 'itens_pedido_venda', {
+    filters: { pedido_venda_id: pedidoIds },
+    orderBy: { column: 'created_at', ascending: true },
+  });
+  let itensFiltrados = itens;
+  if (filtros.produto_id) {
+    itensFiltrados = itens.filter((i) => i.produto_id === filtros.produto_id);
+  }
+  let produtoIdsFiltro = [...new Set(itensFiltrados.map((i) => i.produto_id))];
+  if (filtros.fornecedor_id) {
+    const produtos = await db.select<{ id: string; fornecedor_principal_id: string | null }>(
+      client,
+      'produtos',
+      { filters: { id: produtoIdsFiltro } }
+    );
+    const pf = await db.select<{ produto_id: string; fornecedor_id: string }>(
+      client,
+      'produtos_fornecedores',
+      { filters: { fornecedor_id: filtros.fornecedor_id } }
+    );
+    const idsComFornecedor = new Set(
+      produtos.filter((p) => p.fornecedor_principal_id === filtros.fornecedor_id).map((p) => p.id)
+    );
+    pf.forEach((r) => idsComFornecedor.add(r.produto_id));
+    itensFiltrados = itensFiltrados.filter((i) => idsComFornecedor.has(i.produto_id));
+    produtoIdsFiltro = [...new Set(itensFiltrados.map((i) => i.produto_id))];
+  }
+  const produtoIds = produtoIdsFiltro.length ? produtoIdsFiltro : [];
+  const produtos =
+    produtoIds.length > 0
+      ? await db.select<{ id: string; codigo: string; descricao: string; tipo: string; fornecedor_principal_id: string | null }>(
+          client,
+          'produtos',
+          { filters: { id: produtoIds } }
+        )
+      : [];
+  const fornecedorIds = [...new Set(produtos.map((p) => p.fornecedor_principal_id).filter((id): id is string => id != null))];
+  const fornecedores =
+    fornecedorIds.length > 0
+      ? await db.select<{ id: string; nome: string }>(client, 'fornecedores', { filters: { id: fornecedorIds } })
+      : [];
+  const clientesIds = [...new Set(pedidosNoPeriodo.map((p) => p.cliente_id).filter((id): id is string => id != null))];
+  const clientes =
+    clientesIds.length > 0
+      ? await db.select<{ id: string; nome: string }>(client, 'clientes', { filters: { id: clientesIds } })
+      : [];
+  const produtosMap = new Map(produtos.map((p) => [p.id, p]));
+  const fornecedoresMap = new Map(fornecedores.map((f) => [f.id, f]));
+  const clientesMap = new Map(clientes.map((c) => [c.id, c]));
+  const pedidosMap = new Map(pedidosNoPeriodo.map((p) => [p.id, p]));
+  const linhas: LinhaRelatorioVendas[] = [];
+  let total_valor = 0;
+  for (const i of itensFiltrados) {
+    const pedido = pedidosMap.get(i.pedido_venda_id);
+    if (!pedido) continue;
+    const produto = produtosMap.get(i.produto_id);
+    const fornecedor_nome = produto?.fornecedor_principal_id
+      ? fornecedoresMap.get(produto.fornecedor_principal_id)?.nome ?? null
+      : null;
+    const total_item = Number(i.total_item);
+    total_valor += total_item;
+    linhas.push({
+      pedido_id: i.pedido_venda_id,
+      data_pedido: pedido.data_pedido,
+      cliente_nome: pedido.cliente_id ? clientesMap.get(pedido.cliente_id)?.nome ?? null : null,
+      produto_id: i.produto_id,
+      produto_codigo: produto?.codigo ?? '',
+      produto_descricao: produto?.descricao ?? '',
+      produto_tipo: produto?.tipo ?? '',
+      fornecedor_nome,
+      quantidade: Number(i.quantidade),
+      preco_unitario: Number(i.preco_unitario),
+      total_item,
+    });
+  }
+  return {
+    periodo: { data_inicio: filtros.data_inicio, data_fim: filtros.data_fim },
+    resumo: { total_pedidos: pedidosNoPeriodo.length, total_valor, total_linhas: linhas.length },
+    linhas,
+  };
 }

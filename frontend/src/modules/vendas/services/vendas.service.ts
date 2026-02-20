@@ -84,3 +84,54 @@ export async function getCalcularDistancia(endereco: string, token: string): Pro
     token
   );
 }
+
+export interface LinhaRelatorioVendas {
+  pedido_id: string;
+  data_pedido: string;
+  cliente_nome: string | null;
+  produto_id: string;
+  produto_codigo: string;
+  produto_descricao: string;
+  produto_tipo: string;
+  fornecedor_nome: string | null;
+  quantidade: number;
+  preco_unitario: number;
+  total_item: number;
+}
+
+export interface RelatorioVendasResult {
+  periodo: { data_inicio: string; data_fim: string };
+  resumo: { total_pedidos: number; total_valor: number; total_linhas: number };
+  linhas: LinhaRelatorioVendas[];
+}
+
+export interface RelatorioVendasParams {
+  data_inicio: string;
+  data_fim: string;
+  fornecedor_id?: string | null;
+  produto_id?: string | null;
+}
+
+export async function getRelatorioVendas(
+  token: string,
+  params: RelatorioVendasParams
+): Promise<RelatorioVendasResult> {
+  const q = new URLSearchParams({
+    data_inicio: params.data_inicio,
+    data_fim: params.data_fim,
+  });
+  if (params.fornecedor_id) q.set('fornecedor_id', params.fornecedor_id);
+  if (params.produto_id) q.set('produto_id', params.produto_id);
+  return apiClient.get<RelatorioVendasResult>(`/api/vendas/relatorio?${q.toString()}`, token);
+}
+
+export async function getRelatorioVendasPorMes(
+  token: string,
+  mes: string,
+  params?: { fornecedor_id?: string | null; produto_id?: string | null }
+): Promise<RelatorioVendasResult> {
+  const q = new URLSearchParams({ mes });
+  if (params?.fornecedor_id) q.set('fornecedor_id', params.fornecedor_id);
+  if (params?.produto_id) q.set('produto_id', params.produto_id);
+  return apiClient.get<RelatorioVendasResult>(`/api/vendas/relatorio?${q.toString()}`, token);
+}

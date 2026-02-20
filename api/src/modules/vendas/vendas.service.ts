@@ -66,6 +66,12 @@ export const vendasService = {
     }
     return repo.getItensSugeridos(produtoId, limit);
   },
+  getRelatorioVendas: (env: Env, filtros: Parameters<typeof repo.getRelatorioVendas>[0]) => {
+    if (useSupabaseDataAPI(env)) {
+      return repoSupabase.getRelatorioVendas(env, filtros);
+    }
+    return repo.getRelatorioVendas(filtros);
+  },
   async calcularDistancia(env: Env, enderecoDestino: string): Promise<{ km: number }> {
     const config = getEnv(env);
     if (!config.googleMaps.apiKey || !config.googleMaps.enderecoOrigemLoja) {

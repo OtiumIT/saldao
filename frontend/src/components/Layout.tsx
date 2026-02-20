@@ -70,6 +70,7 @@ export function Layout({ children }: LayoutProps) {
 
     { name: 'Vendas e Entregas', isSection: true },
     { name: 'Vendas', path: '/vendas' },
+    { name: 'Relatório de vendas', path: '/vendas/relatorio' },
     { name: 'Entregas', path: '/roteirizacao/entregas' },
     { name: 'Veículos', path: '/roteirizacao/veiculos' },
 

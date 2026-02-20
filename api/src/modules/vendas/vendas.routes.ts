@@ -103,6 +103,39 @@ export const vendasRoutes = new Hono<Ctx>()
       return c.json({ error: msg }, 500);
     }
   })
+  .get('/relatorio', async (c) => {
+    const auth = await requireAuth(c);
+    if (auth instanceof Response) return auth;
+    const data_inicio = c.req.query('data_inicio');
+    const data_fim = c.req.query('data_fim');
+    const mes = c.req.query('mes');
+    const fornecedor_id = c.req.query('fornecedor_id') || undefined;
+    const produto_id = c.req.query('produto_id') || undefined;
+    let dataInicio: string;
+    let dataFim: string;
+    if (mes && /^\d{4}-\d{2}$/.test(mes)) {
+      const [y, m] = mes.split('-');
+      dataInicio = `${y}-${m}-01`;
+      const lastDay = new Date(Number(y), Number(m), 0).getDate();
+      dataFim = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+    } else if (data_inicio && data_fim) {
+      dataInicio = data_inicio;
+      dataFim = data_fim;
+    } else {
+      return c.json({ error: 'Informe data_inicio e data_fim, ou mes (YYYY-MM)' }, 400);
+    }
+    try {
+      const result = await vendasService.getRelatorioVendas(c.env, {
+        data_inicio: dataInicio,
+        data_fim: dataFim,
+        fornecedor_id: fornecedor_id && fornecedor_id.trim() ? fornecedor_id.trim() : null,
+        produto_id: produto_id && produto_id.trim() ? produto_id.trim() : null,
+      });
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : 'Erro ao gerar relatório' }, 500);
+    }
+  })
   .get('/:id', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;

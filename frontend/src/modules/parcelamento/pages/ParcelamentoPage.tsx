@@ -122,7 +122,7 @@ export function ParcelamentoPage() {
         />
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Editar taxa de parcelamento">
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Editar taxa de parcelamento">
         {editing && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <p className="text-sm text-gray-600">

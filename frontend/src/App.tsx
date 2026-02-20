@@ -19,6 +19,7 @@ import { ProducaoOrdensPage } from './modules/producao/pages/ProducaoOrdensPage'
 import { VendasListPage } from './modules/vendas/pages/VendasListPage';
 import { VendaDetailPage } from './modules/vendas/pages/VendaDetailPage';
 import { CaixaPage } from './modules/vendas/pages/CaixaPage';
+import { RelatorioVendasPage } from './modules/vendas/pages/RelatorioVendasPage';
 import { ContasPagarPage } from './modules/financeiro/pages/ContasPagarPage';
 import { ContasReceberPage } from './modules/financeiro/pages/ContasReceberPage';
 import { ResumoFinanceiroPage } from './modules/financeiro/pages/ResumoFinanceiroPage';
@@ -97,6 +98,7 @@ function App() {
           <Route path="/producao/bom" element={<ProtectedRoute><ProducaoBomPage /></ProtectedRoute>} />
           <Route path="/producao/ordens" element={<ProtectedRoute><ProducaoOrdensPage /></ProtectedRoute>} />
           <Route path="/vendas" element={<ProtectedRoute><VendasListPage /></ProtectedRoute>} />
+          <Route path="/vendas/relatorio" element={<ProtectedRoute><RelatorioVendasPage /></ProtectedRoute>} />
           <Route path="/vendas/caixa" element={<ProtectedRoute><CaixaPage /></ProtectedRoute>} />
           <Route path="/vendas/:id" element={<ProtectedRoute><VendaDetailPage /></ProtectedRoute>} />
           <Route path="/financeiro/contas-pagar" element={<ProtectedRoute><ContasPagarPage /></ProtectedRoute>} />

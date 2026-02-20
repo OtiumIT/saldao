@@ -393,3 +393,100 @@ export async function getItensSugeridos(produtoId: string, limit = 5): Promise<I
   );
   return rows.map((r) => ({ ...r, preco_venda: Number(r.preco_venda), vezes_junto: Number(r.vezes_junto) }));
 }
+
+export interface LinhaRelatorioVendas {
+  pedido_id: string;
+  data_pedido: string;
+  cliente_nome: string | null;
+  produto_id: string;
+  produto_codigo: string;
+  produto_descricao: string;
+  produto_tipo: string;
+  fornecedor_nome: string | null;
+  quantidade: number;
+  preco_unitario: number;
+  total_item: number;
+}
+
+export interface RelatorioVendasResult {
+  periodo: { data_inicio: string; data_fim: string };
+  resumo: { total_pedidos: number; total_valor: number; total_linhas: number };
+  linhas: LinhaRelatorioVendas[];
+}
+
+export async function getRelatorioVendas(filtros: {
+  data_inicio: string;
+  data_fim: string;
+  fornecedor_id?: string | null;
+  produto_id?: string | null;
+}): Promise<RelatorioVendasResult> {
+  const pool = getPool();
+  const linhas: LinhaRelatorioVendas[] = [];
+  let total_pedidos = 0;
+  let total_valor = 0;
+  if (!pool) {
+    return {
+      periodo: { data_inicio: filtros.data_inicio, data_fim: filtros.data_fim },
+      resumo: { total_pedidos: 0, total_valor: 0, total_linhas: 0 },
+      linhas: [],
+    };
+  }
+  const params: unknown[] = [filtros.data_inicio, filtros.data_fim];
+  let idx = 3;
+  let whereFornecedor = '';
+  if (filtros.fornecedor_id) {
+    whereFornecedor = ` AND (pr.fornecedor_principal_id = $${idx} OR EXISTS (SELECT 1 FROM produtos_fornecedores pf WHERE pf.produto_id = pr.id AND pf.fornecedor_id = $${idx}))`;
+    params.push(filtros.fornecedor_id);
+    idx++;
+  }
+  let whereProduto = '';
+  if (filtros.produto_id) {
+    whereProduto = ` AND i.produto_id = $${idx}`;
+    params.push(filtros.produto_id);
+    idx++;
+  }
+  const sql = `
+    SELECT p.id AS pedido_id, p.data_pedido::text, c.nome AS cliente_nome,
+           i.produto_id, pr.codigo AS produto_codigo, pr.descricao AS produto_descricao, pr.tipo AS produto_tipo,
+           f.nome AS fornecedor_nome,
+           i.quantidade::numeric, i.preco_unitario::numeric, i.total_item::numeric
+    FROM itens_pedido_venda i
+    JOIN pedidos_venda p ON p.id = i.pedido_venda_id
+    JOIN produtos pr ON pr.id = i.produto_id
+    LEFT JOIN clientes c ON c.id = p.cliente_id
+    LEFT JOIN fornecedores f ON f.id = pr.fornecedor_principal_id
+    WHERE p.data_pedido >= $1 AND p.data_pedido <= $2
+      AND p.status IN ('confirmado', 'entregue')
+      ${whereFornecedor}${whereProduto}
+    ORDER BY p.data_pedido, p.id, i.created_at`;
+  const { rows } = await pool.query<
+    LinhaRelatorioVendas & {
+      quantidade: string;
+      preco_unitario: string;
+      total_item: string;
+    }
+  >(sql, params);
+  const pedidosIds = new Set<string>();
+  for (const r of rows) {
+    pedidosIds.add(r.pedido_id);
+    total_valor += Number(r.total_item);
+    linhas.push({
+      pedido_id: r.pedido_id,
+      data_pedido: r.data_pedido,
+      cliente_nome: r.cliente_nome,
+      produto_id: r.produto_id,
+      produto_codigo: r.produto_codigo,
+      produto_descricao: r.produto_descricao,
+      produto_tipo: r.produto_tipo,
+      fornecedor_nome: r.fornecedor_nome,
+      quantidade: Number(r.quantidade),
+      preco_unitario: Number(r.preco_unitario),
+      total_item: Number(r.total_item),
+    });
+  }
+  return {
+    periodo: { data_inicio: filtros.data_inicio, data_fim: filtros.data_fim },
+    resumo: { total_pedidos: pedidosIds.size, total_valor, total_linhas: linhas.length },
+    linhas,
+  };
+}
