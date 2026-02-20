@@ -106,6 +106,8 @@ export async function create(
     previsao_entrega_em_dias?: number | null;
     distancia_km?: number | null;
     valor_frete?: number | null;
+    parcelas?: number | null;
+    taxa_parcelamento_percentual?: number | null;
     itens: Array<{ produto_id: string; quantidade: number; preco_unitario: number }>;
   }
 ): Promise<PedidoVenda> {
@@ -136,6 +138,8 @@ export async function create(
     previsao_entrega_em_dias: data.previsao_entrega_em_dias ?? null,
     distancia_km: data.distancia_km ?? null,
     valor_frete: valorFrete,
+    parcelas: data.parcelas ?? null,
+    taxa_parcelamento_percentual: data.taxa_parcelamento_percentual ?? null,
     status: 'rascunho',
   } as any);
 
@@ -156,7 +160,10 @@ export async function create(
     } as any);
   }
 
-  const total = totalItens + valorFrete;
+  let total = totalItens + valorFrete;
+  if (data.parcelas != null && data.parcelas > 1 && data.taxa_parcelamento_percentual != null && data.taxa_parcelamento_percentual > 0) {
+    total = Math.round(total * (1 + data.taxa_parcelamento_percentual / 100) * 100) / 100;
+  }
   const updated = await db.update<PedidoVenda>(client, 'pedidos_venda', pedido.id, { total } as any);
   return updated!;
 }
@@ -173,6 +180,8 @@ export async function update(
     previsao_entrega_em_dias?: number | null;
     distancia_km?: number | null;
     valor_frete?: number | null;
+    parcelas?: number | null;
+    taxa_parcelamento_percentual?: number | null;
     itens?: Array<{ produto_id: string; quantidade: number; preco_unitario: number }>;
   }
 ): Promise<PedidoVenda | null> {
@@ -189,10 +198,16 @@ export async function update(
   if (data.previsao_entrega_em_dias !== undefined) updateData.previsao_entrega_em_dias = data.previsao_entrega_em_dias;
   if (data.distancia_km !== undefined) updateData.distancia_km = data.distancia_km;
   if (data.valor_frete !== undefined) updateData.valor_frete = data.valor_frete;
+  if (data.parcelas !== undefined) updateData.parcelas = data.parcelas;
+  if (data.taxa_parcelamento_percentual !== undefined) updateData.taxa_parcelamento_percentual = data.taxa_parcelamento_percentual;
 
   if (Object.keys(updateData).length > 0) {
     await db.update<PedidoVenda>(client, 'pedidos_venda', id, updateData as any);
   }
+
+  const valorFrete = data.valor_frete !== undefined ? data.valor_frete : (current.valor_frete ?? 0);
+  const parcelas = data.parcelas !== undefined ? data.parcelas : current.parcelas;
+  const taxaParcelamento = data.taxa_parcelamento_percentual !== undefined ? data.taxa_parcelamento_percentual : current.taxa_parcelamento_percentual;
 
   if (data.itens) {
     const produtoIds = [...new Set(data.itens.map((i) => i.produto_id))];
@@ -217,7 +232,6 @@ export async function update(
 
     // Criar novos itens
     let totalItens = 0;
-    const valorFrete = data.valor_frete !== undefined ? data.valor_frete : (current.valor_frete ?? 0);
     for (const it of data.itens) {
       const totalItem = it.quantidade * it.preco_unitario;
       totalItens += totalItem;
@@ -229,7 +243,21 @@ export async function update(
         total_item: totalItem,
       } as any);
     }
-    await db.update<PedidoVenda>(client, 'pedidos_venda', id, { total: totalItens + (valorFrete ?? 0) } as any);
+    let total = totalItens + (valorFrete ?? 0);
+    if (parcelas != null && parcelas > 1 && taxaParcelamento != null && taxaParcelamento > 0) {
+      total = Math.round(total * (1 + taxaParcelamento / 100) * 100) / 100;
+    }
+    await db.update<PedidoVenda>(client, 'pedidos_venda', id, { total } as any);
+  } else {
+    const itensAtuais = await db.select<ItemPedidoVenda & { total_item: string }>(client, 'itens_pedido_venda', {
+      filters: { pedido_venda_id: id },
+    });
+    const totalItens = itensAtuais.reduce((s, i) => s + Number(i.total_item), 0);
+    let total = totalItens + (valorFrete ?? 0);
+    if (parcelas != null && parcelas > 1 && taxaParcelamento != null && taxaParcelamento > 0) {
+      total = Math.round(total * (1 + taxaParcelamento / 100) * 100) / 100;
+    }
+    await db.update<PedidoVenda>(client, 'pedidos_venda', id, { total } as any);
   }
 
   const updated = await findById(env, id);

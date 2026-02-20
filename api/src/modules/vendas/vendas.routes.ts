@@ -23,6 +23,8 @@ const createSchema = z.object({
   previsao_entrega_em_dias: z.number().int().positive().nullable().optional(),
   distancia_km: z.number().min(0).nullable().optional(),
   valor_frete: z.number().min(0).nullable().optional(),
+  parcelas: z.number().int().min(1).nullable().optional(),
+  taxa_parcelamento_percentual: z.number().min(0).max(100).nullable().optional(),
   itens: z.array(itemSchema).min(1, 'Pelo menos um item'),
 });
 

@@ -22,6 +22,7 @@ import { custosOperacionaisRoutes } from './modules/custos-operacionais/custos-o
 import { categoriasProdutoRoutes } from './modules/categorias-produto/categorias-produto.routes.js';
 import { funcionariosRoutes } from './modules/funcionarios/funcionarios.routes.js';
 import { coresRoutes } from './modules/cores/cores.routes.js';
+import { parcelamentoRoutes } from './modules/parcelamento/parcelamento.routes.js';
 
 type WorkerContext = {
   Bindings: Env;
@@ -98,6 +99,7 @@ app.route('/api/roteirizacao', roteirizacaoRoutes);
 app.route('/api/custos-operacionais', custosOperacionaisRoutes);
 app.route('/api/funcionarios', funcionariosRoutes);
 app.route('/api/cores', coresRoutes);
+app.route('/api/parcelamento', parcelamentoRoutes);
 
 app.get('/', (c) => {
   return c.json({

@@ -28,6 +28,7 @@ import { CategoriasCustoPage } from './modules/custos-operacionais/pages/Categor
 import { CustosMesPage } from './modules/custos-operacionais/pages/CustosMesPage';
 import { CategoriasProdutoPage } from './modules/categorias-produto/pages/CategoriasProdutoPage';
 import { CoresListPage } from './modules/cores/pages/CoresListPage';
+import { ParcelamentoPage } from './modules/parcelamento/pages/ParcelamentoPage';
 import { FuncionariosListPage } from './modules/funcionarios/pages/FuncionariosListPage';
 import { FolhaPagamentoPage } from './modules/funcionarios/pages/FolhaPagamentoPage';
 import { DashboardPage } from './modules/dashboard/pages/DashboardPage';
@@ -88,6 +89,7 @@ function App() {
           <Route path="/estoque/fabricados" element={<ProtectedRoute><ProductsListPage tipoFromRoute="fabricado" /></ProtectedRoute>} />
           <Route path="/categorias-produto" element={<ProtectedRoute><CategoriasProdutoPage /></ProtectedRoute>} />
           <Route path="/cores" element={<ProtectedRoute><CoresListPage /></ProtectedRoute>} />
+          <Route path="/parcelamento" element={<ProtectedRoute><ParcelamentoPage /></ProtectedRoute>} />
           <Route path="/estoque/movimentacoes" element={<ProtectedRoute><MovimentacoesPage /></ProtectedRoute>} />
           <Route path="/estoque/conferencia" element={<ProtectedRoute><ConferenciaEstoquePage /></ProtectedRoute>} />
           <Route path="/compras" element={<ProtectedRoute><ComprasListPage /></ProtectedRoute>} />

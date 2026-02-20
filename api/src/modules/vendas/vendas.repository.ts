@@ -26,8 +26,12 @@ export interface PedidoVenda {
   previsao_entrega_em_dias: number | null;
   /** Distância em km para cálculo do frete (entrega) */
   distancia_km: number | null;
-  /** Valor do frete (total = itens + valor_frete) */
+  /** Valor do frete (total = itens + valor_frete [+ taxa parcelamento]) */
   valor_frete: number | null;
+  /** Número de parcelas no cartão (null = à vista). Total já inclui taxa quando > 1. */
+  parcelas: number | null;
+  /** Taxa % aplicada no parcelamento (armazenada no momento da venda). */
+  taxa_parcelamento_percentual: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,7 +50,7 @@ export interface ItemPedidoVendaComProduto extends ItemPedidoVenda {
 export async function list(filtros?: { status?: string; data_inicio?: string; data_fim?: string }): Promise<PedidoVendaComCliente[]> {
   const pool = getPool();
   if (!pool) return [];
-  let sql = `SELECT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.created_at, p.updated_at,
+  let sql = `SELECT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
     c.nome AS cliente_nome FROM pedidos_venda p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE 1=1`;
   const params: unknown[] = [];
   let i = 1;
@@ -61,12 +65,14 @@ export async function list(filtros?: { status?: string; data_inicio?: string; da
 export async function findById(id: string): Promise<PedidoVendaComCliente | null> {
   const pool = getPool();
   if (!pool) return null;
-  const { rows } = await pool.query<PedidoVendaComCliente>(
-    `SELECT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.created_at, p.updated_at,
+  const { rows } = await pool.query<PedidoVendaComCliente & { taxa_parcelamento_percentual: string | null }>(
+    `SELECT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
      c.nome AS cliente_nome, c.fone AS cliente_fone FROM pedidos_venda p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE p.id = $1`,
     [id]
   );
-  return rows[0] ?? null;
+  const r = rows[0];
+  if (!r) return null;
+  return { ...r, taxa_parcelamento_percentual: r.taxa_parcelamento_percentual != null ? Number(r.taxa_parcelamento_percentual) : null };
 }
 
 export async function listItens(pedidoId: string): Promise<ItemPedidoVendaComProduto[]> {
@@ -90,6 +96,8 @@ export async function create(data: {
   previsao_entrega_em_dias?: number | null;
   distancia_km?: number | null;
   valor_frete?: number | null;
+  parcelas?: number | null;
+  taxa_parcelamento_percentual?: number | null;
   itens: Array<{ produto_id: string; quantidade: number; preco_unitario: number }>;
 }): Promise<PedidoVenda> {
   const pool = getPool();
@@ -112,10 +120,10 @@ export async function create(data: {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows: pedRows } = await client.query<PedidoVenda>(
-      `INSERT INTO pedidos_venda (cliente_id, data_pedido, tipo_entrega, endereco_entrega, observacoes, total, previsao_entrega_em_dias, distancia_km, valor_frete)
-       VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8) RETURNING id, cliente_id, data_pedido::text, tipo_entrega, status, endereco_entrega, observacoes, total, previsao_entrega_em_dias, distancia_km::numeric, valor_frete::numeric, created_at, updated_at`,
-      [data.cliente_id ?? null, dataPedido, data.tipo_entrega, data.endereco_entrega ?? null, data.observacoes ?? null, data.previsao_entrega_em_dias ?? null, data.distancia_km ?? null, valorFrete]
+    const { rows: pedRows } = await client.query<PedidoVenda & { taxa_parcelamento_percentual: string | null }>(
+      `INSERT INTO pedidos_venda (cliente_id, data_pedido, tipo_entrega, endereco_entrega, observacoes, total, previsao_entrega_em_dias, distancia_km, valor_frete, parcelas, taxa_parcelamento_percentual)
+       VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9, $10) RETURNING id, cliente_id, data_pedido::text, tipo_entrega, status, endereco_entrega, observacoes, total, previsao_entrega_em_dias, distancia_km::numeric, valor_frete::numeric, parcelas, taxa_parcelamento_percentual::numeric, created_at, updated_at`,
+      [data.cliente_id ?? null, dataPedido, data.tipo_entrega, data.endereco_entrega ?? null, data.observacoes ?? null, data.previsao_entrega_em_dias ?? null, data.distancia_km ?? null, valorFrete, data.parcelas ?? null, data.taxa_parcelamento_percentual ?? null]
     );
     const pedido = pedRows[0];
     if (!pedido) throw new Error('Falha ao criar pedido');
@@ -129,10 +137,14 @@ export async function create(data: {
         [pedido.id, it.produto_id, it.quantidade, it.preco_unitario, totalItem]
       );
     }
-    const total = totalItens + valorFrete;
+    let total = totalItens + valorFrete;
+    if (data.parcelas != null && data.parcelas > 1 && data.taxa_parcelamento_percentual != null && data.taxa_parcelamento_percentual > 0) {
+      total = Math.round(total * (1 + data.taxa_parcelamento_percentual / 100) * 100) / 100;
+    }
     await client.query('UPDATE pedidos_venda SET total = $2, updated_at = NOW() WHERE id = $1', [pedido.id, total]);
     await client.query('COMMIT');
-    return { ...pedido, total };
+    const out = { ...pedido, total, taxa_parcelamento_percentual: pedido.taxa_parcelamento_percentual != null ? Number(pedido.taxa_parcelamento_percentual) : null };
+    return out;
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;
@@ -150,6 +162,8 @@ export async function update(id: string, data: {
   previsao_entrega_em_dias?: number | null;
   distancia_km?: number | null;
   valor_frete?: number | null;
+  parcelas?: number | null;
+  taxa_parcelamento_percentual?: number | null;
   itens?: Array<{ produto_id: string; quantidade: number; preco_unitario: number }>;
 }): Promise<PedidoVenda | null> {
   const pool = getPool();
@@ -162,10 +176,12 @@ export async function update(id: string, data: {
     const previsao = data.previsao_entrega_em_dias !== undefined ? data.previsao_entrega_em_dias : current.previsao_entrega_em_dias;
     const distanciaKm = data.distancia_km !== undefined ? data.distancia_km : current.distancia_km;
     const valorFrete = data.valor_frete !== undefined ? data.valor_frete : (current.valor_frete ?? 0);
+    const parcelas = data.parcelas !== undefined ? data.parcelas : current.parcelas;
+    const taxaParcelamento = data.taxa_parcelamento_percentual !== undefined ? data.taxa_parcelamento_percentual : current.taxa_parcelamento_percentual;
     await client.query(
       `UPDATE pedidos_venda SET cliente_id = COALESCE($2, cliente_id), data_pedido = COALESCE($3, data_pedido), tipo_entrega = COALESCE($4, tipo_entrega),
-       endereco_entrega = COALESCE($5, endereco_entrega), observacoes = COALESCE($6, observacoes), previsao_entrega_em_dias = $7, distancia_km = $8, valor_frete = $9, updated_at = NOW() WHERE id = $1`,
-      [id, data.cliente_id ?? null, data.data_pedido ?? null, data.tipo_entrega ?? null, data.endereco_entrega ?? null, data.observacoes ?? null, previsao, distanciaKm ?? null, valorFrete]
+       endereco_entrega = COALESCE($5, endereco_entrega), observacoes = COALESCE($6, observacoes), previsao_entrega_em_dias = $7, distancia_km = $8, valor_frete = $9, parcelas = $10, taxa_parcelamento_percentual = $11, updated_at = NOW() WHERE id = $1`,
+      [id, data.cliente_id ?? null, data.data_pedido ?? null, data.tipo_entrega ?? null, data.endereco_entrega ?? null, data.observacoes ?? null, previsao, distanciaKm ?? null, valorFrete, parcelas ?? null, taxaParcelamento ?? null]
     );
     if (data.itens) {
       const produtoIds = [...new Set(data.itens.map((i) => i.produto_id))];
@@ -193,12 +209,19 @@ export async function update(id: string, data: {
           [id, it.produto_id, it.quantidade, it.preco_unitario, totalItem]
         );
       }
-      const total = totalItens + (valorFrete ?? 0);
+      let total = totalItens + (valorFrete ?? 0);
+      if (parcelas != null && parcelas > 1 && taxaParcelamento != null && taxaParcelamento > 0) {
+        total = Math.round(total * (1 + taxaParcelamento / 100) * 100) / 100;
+      }
       await client.query('UPDATE pedidos_venda SET total = $2, updated_at = NOW() WHERE id = $1', [id, total]);
     } else {
       const { rows: sumRows } = await client.query<{ sum: string }>('SELECT COALESCE(SUM(total_item), 0) AS sum FROM itens_pedido_venda WHERE pedido_venda_id = $1', [id]);
       const totalItens = Number(sumRows[0]?.sum ?? 0);
-      await client.query('UPDATE pedidos_venda SET total = $2, updated_at = NOW() WHERE id = $1', [id, totalItens + (valorFrete ?? 0)]);
+      let total = totalItens + (valorFrete ?? 0);
+      if (parcelas != null && parcelas > 1 && taxaParcelamento != null && taxaParcelamento > 0) {
+        total = Math.round(total * (1 + taxaParcelamento / 100) * 100) / 100;
+      }
+      await client.query('UPDATE pedidos_venda SET total = $2, updated_at = NOW() WHERE id = $1', [id, total]);
     }
     await client.query('COMMIT');
     const updated = await findById(id);

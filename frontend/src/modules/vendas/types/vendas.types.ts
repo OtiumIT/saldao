@@ -29,8 +29,12 @@ export interface PedidoVenda {
   previsao_entrega_em_dias: number | null;
   /** Distância em km para cálculo do frete */
   distancia_km: number | null;
-  /** Valor do frete (total = itens + valor_frete) */
+  /** Valor do frete (total = itens + valor_frete [+ taxa parcelamento]) */
   valor_frete: number | null;
+  /** Número de parcelas no cartão (null = à vista). Total já inclui taxa quando > 1. */
+  parcelas: number | null;
+  /** Taxa % aplicada no parcelamento (armazenada no momento da venda). */
+  taxa_parcelamento_percentual: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -57,5 +61,9 @@ export interface CreatePedidoVendaRequest {
   distancia_km?: number | null;
   /** Valor do frete. Calculado pela faixa até 13 km; acima de 13 km informar manualmente. */
   valor_frete?: number | null;
+  /** Número de parcelas no cartão (1 = à vista no cartão sem taxa; 2+ = parcelado com taxa). Null = à vista (outro meio). */
+  parcelas?: number | null;
+  /** Taxa % de parcelamento (aplicada sobre subtotal + frete). O total enviado deve já incluir a taxa. */
+  taxa_parcelamento_percentual?: number | null;
   itens: Array<{ produto_id: string; quantidade: number; preco_unitario: number }>;
 }

@@ -89,6 +89,15 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
     const created = await roteirizacaoService.createEntrega(c.env, parsed.data);
     return c.json(created, 201);
   })
+  .patch('/entregas/ordem', async (c) => {
+    const auth = await requireAuth(c);
+    if (auth instanceof Response) return auth;
+    const body = await c.req.json();
+    const parsed = z.object({ entrega_ids_ordenados: z.array(z.string().uuid()) }).safeParse(body);
+    if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
+    await roteirizacaoService.aplicarOrdemRota(c.env, parsed.data.entrega_ids_ordenados);
+    return c.json({ ok: true });
+  })
   .patch('/entregas/:id', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
@@ -162,13 +171,4 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     const ids = await roteirizacaoService.sugerirOrdemRota(c.env, parsed.data.veiculo_id, parsed.data.data_entrega);
     return c.json({ entrega_ids: ids });
-  })
-  .patch('/entregas/ordem', async (c) => {
-    const auth = await requireAuth(c);
-    if (auth instanceof Response) return auth;
-    const body = await c.req.json();
-    const parsed = z.object({ entrega_ids_ordenados: z.array(z.string().uuid()) }).safeParse(body);
-    if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
-    await roteirizacaoService.aplicarOrdemRota(c.env, parsed.data.entrega_ids_ordenados);
-    return c.json({ ok: true });
   });

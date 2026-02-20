@@ -97,11 +97,8 @@ function buildRotaHtml(
   </table>
 
   <footer class="footer">
-    Saldão de Móveis Jerusalém — Rota ${formatarData(dataEntrega)} — ${nomeVeiculo} — ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+    Saldão de Móveis Jerusalém — Rota ${formatarData(dataEntrega)} — ${escapeHtml(nomeVeiculo)} — ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
   </footer>
-  <script>
-    window.onload = function() { window.print(); };
-  </script>
 </body>
 </html>`;
 }
@@ -109,6 +106,7 @@ function buildRotaHtml(
 /**
  * Abre a rota de entrega em nova janela e aciona a impressão.
  * Lista deve estar na ordem da rota (1ª parada, 2ª parada, etc.).
+ * Usa Blob + object URL para o conteúdo ser carregado como documento e evitar tela em branco.
  */
 export function imprimirRota(
   dataEntrega: string,
@@ -119,11 +117,20 @@ export function imprimirRota(
     return;
   }
   const html = buildRotaHtml(dataEntrega, nomeVeiculo, lista);
-  const w = window.open('', '_blank', 'noopener,noreferrer');
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank', 'noopener,noreferrer');
   if (!w) {
+    URL.revokeObjectURL(url);
     alert('Permita pop-ups para imprimir a rota.');
     return;
   }
-  w.document.write(html);
-  w.document.close();
+  w.addEventListener('load', () => {
+    URL.revokeObjectURL(url);
+    try {
+      w.print();
+    } catch {
+      // janela pode ter sido fechada
+    }
+  });
 }

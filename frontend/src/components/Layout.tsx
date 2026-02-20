@@ -49,6 +49,7 @@ export function Layout({ children }: LayoutProps) {
         { name: 'Produtos', path: '/produtos' },
         { name: 'Categorias de produto', path: '/categorias-produto' },
         { name: 'Cores (chapas)', path: '/cores' },
+        { name: 'Opções de parcelamento', path: '/parcelamento' },
         { name: 'BOM (receita)', path: '/producao/bom' },
         ...(hasAdminAccess ? [{ name: 'Usuários', path: '/users' }] : []),
       ],

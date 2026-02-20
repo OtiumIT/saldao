@@ -1,4 +1,4 @@
-import { FormEvent, useState, useRef } from 'react';
+import { FormEvent, useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useProdutos } from '../../estoque/hooks/useProdutos';
 import { Button } from '../../../components/ui/Button';
@@ -6,9 +6,11 @@ import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import * as vendasService from '../services/vendas.service';
 import * as clientesService from '../../clientes/services/clientes.service';
+import * as parcelamentoService from '../../parcelamento/services/parcelamento.service';
 import type { CreateClienteRequest } from '../../clientes/types/clients.types';
 import type { CreatePedidoVendaRequest } from '../types/vendas.types';
 import type { ProdutoComSaldo } from '../../estoque/types/estoque.types';
+import type { OpcaoParcelamento } from '../../parcelamento/types/parcelamento.types';
 
 interface ItemRow {
   produto_id: string;
@@ -40,11 +42,18 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
   const [previsao_entrega_em_dias, setPrevisaoEntregaEmDias] = useState('');
   const [distancia_km, setDistanciaKm] = useState('');
   const [valor_frete_manual, setValorFreteManual] = useState('');
+  const [parcelasSelected, setParcelasSelected] = useState<number | null>(null);
+  const [opcoesParcelamento, setOpcoesParcelamento] = useState<OpcaoParcelamento[]>([]);
   const [itens, setItens] = useState<ItemRow[]>([{ produto_id: '', quantidade: 1, preco_unitario: 0 }]);
   const [loading, setLoading] = useState(false);
   const [extractLoading, setExtractLoading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    parcelamentoService.listOpcoesParcelamento(token).then(setOpcoesParcelamento).catch(() => {});
+  }, [token]);
 
   const digitsOnly = (s: string) => s.replace(/\D/g, '');
 
@@ -129,7 +138,14 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
       : acimaDe13
         ? (Number.isNaN(freteManualNum) ? 0 : Math.max(0, freteManualNum))
         : (freteTabela ?? 0);
-  const totalGeral = subtotal + valorFrete;
+  const baseTotal = subtotal + valorFrete;
+  const opcaoParcelas = parcelasSelected != null && parcelasSelected > 1
+    ? opcoesParcelamento.find((o) => o.parcelas === parcelasSelected)
+    : undefined;
+  const totalGeral =
+    opcaoParcelas && opcaoParcelas.taxa_percentual > 0
+      ? Math.round(baseTotal * (1 + opcaoParcelas.taxa_percentual / 100) * 100) / 100
+      : baseTotal;
 
   const itensSemEstoque = validItens.filter((r) => getSaldo(r.produto_id) < r.quantidade);
   const hasInsuficiente = itensSemEstoque.length > 0;
@@ -192,6 +208,10 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
     setLoading(true);
     try {
       const previsaoNum = previsao_entrega_em_dias.trim() ? parseInt(previsao_entrega_em_dias, 10) : null;
+      const taxaParaEnvio =
+        parcelasSelected != null && parcelasSelected > 1 && opcaoParcelas
+          ? opcaoParcelas.taxa_percentual
+          : null;
       await onSaved({
         cliente_id: cliente_id || null,
         data_pedido: data_pedido?.trim() || undefined,
@@ -201,6 +221,8 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
         previsao_entrega_em_dias: previsaoNum && previsaoNum >= 1 ? previsaoNum : null,
         distancia_km: tipo_entrega === 'entrega' && !Number.isNaN(kmNum) ? kmNum : null,
         valor_frete: tipo_entrega === 'entrega' ? valorFrete : null,
+        parcelas: parcelasSelected ?? null,
+        taxa_parcelamento_percentual: taxaParaEnvio,
         itens: validItens.map((r) => ({ produto_id: r.produto_id, quantidade: r.quantidade, preco_unitario: r.preco_unitario })),
       });
     } catch (err) {
@@ -349,6 +371,9 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
         <div className="text-sm mt-2 space-y-0.5">
           <p className="text-gray-600">Subtotal: R$ {subtotal.toFixed(2)}</p>
           {tipo_entrega === 'entrega' && valorFrete > 0 && <p className="text-gray-600">Frete: R$ {valorFrete.toFixed(2)}</p>}
+          {parcelasSelected != null && parcelasSelected > 1 && opcaoParcelas && opcaoParcelas.taxa_percentual > 0 && (
+            <p className="text-gray-600">Taxa parcelamento ({parcelasSelected}x): {opcaoParcelas.taxa_percentual.toFixed(2)}%</p>
+          )}
           <p className="font-semibold text-gray-900">Total: R$ {totalGeral.toFixed(2)}</p>
         </div>
         {itensSemEstoqueNaoFabricados.length > 0 && (
@@ -460,6 +485,25 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
         </>
       )}
       <Input label="Observações" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Pagamento / Parcelamento</label>
+        <Select
+          options={[
+            { value: '', label: '— À vista (outro meio) —' },
+            { value: '1', label: '1x no cartão (sem taxa)' },
+            ...opcoesParcelamento
+              .filter((o) => o.parcelas > 1)
+              .map((o) => ({ value: String(o.parcelas), label: `${o.parcelas}x no cartão (${Number(o.taxa_percentual).toFixed(2)}%)` })),
+          ]}
+          value={parcelasSelected != null ? String(parcelasSelected) : ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            setParcelasSelected(v === '' ? null : parseInt(v, 10));
+          }}
+        />
+        <p className="text-xs text-gray-500 mt-1">Se parcelado, o total já inclui a taxa sobre (itens + frete).</p>
+      </div>
 
       <div className="flex gap-2 justify-end">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>Cancelar</Button>
