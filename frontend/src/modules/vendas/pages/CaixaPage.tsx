@@ -4,13 +4,16 @@ import { useAuth } from '../../auth/hooks/useAuth';
 import { useProdutos } from '../../estoque/hooks/useProdutos';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { Select } from '../../../components/ui/Select';
 import { Combobox, type ComboboxOption } from '../../../components/ui/Combobox';
 import * as vendasService from '../services/vendas.service';
+import * as parcelamentoService from '../../parcelamento/services/parcelamento.service';
 import { baixarPdfPedido, abrirWhatsAppPedido } from '../lib/pedido-print-whatsapp';
 import * as clientesService from '../../clientes/services/clientes.service';
 import type { Cliente, CreateClienteRequest } from '../../clientes/types/clients.types';
 import type { CreatePedidoVendaRequest } from '../types/vendas.types';
 import type { ProdutoComSaldo } from '../../estoque/types/estoque.types';
+import type { OpcaoParcelamento } from '../../parcelamento/types/parcelamento.types';
 
 interface CartItem {
   produto_id: string;
@@ -70,6 +73,8 @@ export function CaixaPage() {
   const [cep, setCep] = useState('');
   const [loadingDistancia, setLoadingDistancia] = useState(false);
   const [errorDistancia, setErrorDistancia] = useState('');
+  const [parcelasSelected, setParcelasSelected] = useState<number | null>(null);
+  const [opcoesParcelamento, setOpcoesParcelamento] = useState<OpcaoParcelamento[]>([]);
 
   const produtoOptions: ComboboxOption[] = useMemo(() => {
     return produtos.map((p) => {
@@ -143,7 +148,15 @@ export function CaixaPage() {
       : acimaDe13
         ? (Number.isNaN(freteManualNum) ? 0 : Math.max(0, freteManualNum))
         : (freteTabela ?? 0);
-  const totalGeral = Math.max(0, subtotalComDesconto + valorFrete);
+  const baseTotal = Math.max(0, subtotalComDesconto + valorFrete);
+  const opcaoParcelas =
+    parcelasSelected != null && parcelasSelected > 1
+      ? opcoesParcelamento.find((o) => o.parcelas === parcelasSelected)
+      : undefined;
+  const totalGeral =
+    opcaoParcelas && opcaoParcelas.taxa_percentual > 0
+      ? Math.round(baseTotal * (1 + opcaoParcelas.taxa_percentual / 100) * 100) / 100
+      : baseTotal;
 
   const validCart = cart.filter((i) => i.quantidade > 0);
   const itensSemEstoque = validCart.filter((i) => getSaldo(i.produto_id) < i.quantidade);
@@ -208,6 +221,10 @@ export function CaixaPage() {
               preco_unitario: i.preco_unitario,
             }));
 
+      const taxaParaEnvio =
+        parcelasSelected != null && parcelasSelected > 1 && opcaoParcelas
+          ? opcaoParcelas.taxa_percentual
+          : null;
       const payload: CreatePedidoVendaRequest = {
         cliente_id: cliente_id || null,
         tipo_entrega,
@@ -216,6 +233,8 @@ export function CaixaPage() {
         previsao_entrega_em_dias: soFabricadosSemEstoque && previsaoNum >= 1 ? previsaoNum : null,
         distancia_km: tipo_entrega === 'entrega' && !Number.isNaN(kmNum) ? kmNum : null,
         valor_frete: tipo_entrega === 'entrega' ? valorFrete : null,
+        parcelas: parcelasSelected ?? null,
+        taxa_parcelamento_percentual: taxaParaEnvio,
         itens: itensParaEnvio,
       };
       const created = await vendasService.createPedidoVenda(payload, token);
@@ -248,6 +267,7 @@ export function CaixaPage() {
       setObservacoes('');
       setPrevisaoEntregaEmDias('');
       setDescontoValor('');
+      setParcelasSelected(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao finalizar venda');
     } finally {
@@ -277,6 +297,11 @@ export function CaixaPage() {
     })();
     return () => { cancelled = true; };
   }, [cepDigits]);
+
+  useEffect(() => {
+    if (!token) return;
+    parcelamentoService.listOpcoesParcelamento(token).then(setOpcoesParcelamento).catch(() => {});
+  }, [token]);
 
   // Ao mudar para Entrega com cliente selecionado, preencher endereço do cadastro
   useEffect(() => {
@@ -782,6 +807,30 @@ export function CaixaPage() {
                 <div className="flex justify-between text-slate-600 text-sm">
                   <span>Frete</span>
                   <span className="tabular-nums">R$ {valorFrete.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className="text-slate-600 text-sm block">Pagamento / Parcelamento</label>
+                <Select
+                  options={[
+                    { value: '', label: '— À vista (outro meio) —' },
+                    { value: '1', label: '1x no cartão (sem taxa)' },
+                    ...opcoesParcelamento
+                      .filter((o) => o.parcelas > 1)
+                      .map((o) => ({ value: String(o.parcelas), label: `${o.parcelas}x no cartão (${Number(o.taxa_percentual).toFixed(2)}%)` })),
+                  ]}
+                  value={parcelasSelected != null ? String(parcelasSelected) : ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setParcelasSelected(v === '' ? null : parseInt(v, 10));
+                  }}
+                />
+                <p className="text-xs text-slate-500">Se parcelado, o total já inclui a taxa sobre (itens + frete).</p>
+              </div>
+              {parcelasSelected != null && parcelasSelected > 1 && opcaoParcelas && opcaoParcelas.taxa_percentual > 0 && (
+                <div className="flex justify-between text-slate-600 text-sm">
+                  <span>Taxa parcelamento ({parcelasSelected}x)</span>
+                  <span className="tabular-nums">{opcaoParcelas.taxa_percentual.toFixed(2)}%</span>
                 </div>
               )}
               <div className="flex justify-between text-slate-900 font-bold text-lg pt-1">
