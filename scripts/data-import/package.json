@@ -9,7 +9,8 @@
     "import-old": "node import-excel.js",
     "generate-sql": "node generate-sql-inserts.js",
     "dump-gestao": "node dump-gestao-atual.js",
-    "import-gestao": "node import-gestao-atual.js"
+    "import-gestao": "node import-gestao-atual.js",
+    "ceps:viacep": "node atualizar-ceps-clientes.js viacep"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.10",

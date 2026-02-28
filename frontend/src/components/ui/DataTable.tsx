@@ -21,6 +21,10 @@ interface DataTableProps<T> {
   onRowClick?: (item: T) => void;
   /** No mobile, colunas cujas keys estão aqui aparecem em destaque no topo do card (identidade do item). Ex: ['codigo', 'descricao'] */
   mobileTitleColumnKeys?: string[];
+  /** Coluna para ordenação inicial */
+  initialSortColumn?: string;
+  /** Direção da ordenação inicial */
+  initialSortDirection?: 'asc' | 'desc';
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -30,9 +34,11 @@ export function DataTable<T extends Record<string, any>>({
   emptyMessage = 'Nenhum registro encontrado',
   onRowClick,
   mobileTitleColumnKeys,
+  initialSortColumn,
+  initialSortDirection,
 }: DataTableProps<T>) {
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [sortColumn, setSortColumn] = useState<string | null>(initialSortColumn ?? null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(initialSortDirection ?? null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [globalSearch, setGlobalSearch] = useState('');
 

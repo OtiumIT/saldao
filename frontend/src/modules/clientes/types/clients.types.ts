@@ -7,6 +7,7 @@ export interface Cliente {
   cnpj: string | null;
   fone: string | null;
   email: string | null;
+  cep: string | null;
   endereco_entrega: string | null;
   tipo: TipoCliente;
   observacoes: string | null;
@@ -20,6 +21,7 @@ export interface CreateClienteRequest {
   cnpj?: string | null;
   fone?: string;
   email?: string;
+  cep?: string | null;
   endereco_entrega?: string;
   tipo?: TipoCliente;
   observacoes?: string;
@@ -31,6 +33,7 @@ export interface UpdateClienteRequest {
   cnpj?: string | null;
   fone?: string;
   email?: string;
+  cep?: string | null;
   endereco_entrega?: string;
   tipo?: TipoCliente;
   observacoes?: string;

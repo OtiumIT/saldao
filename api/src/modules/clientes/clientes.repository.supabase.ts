@@ -10,7 +10,7 @@ import { normalizeCpf, normalizeCnpj, normalizeDigits } from './clientes.reposit
 export async function list(env: Env): Promise<Cliente[]> {
   const client = getDataClient(env);
   return db.select<Cliente>(client, 'clientes', {
-    orderBy: { column: 'tipo', ascending: true },
+    orderBy: { column: 'created_at', ascending: false },
   });
 }
 
@@ -102,6 +102,7 @@ export async function create(
     cnpj?: string | null;
     fone?: string;
     email?: string;
+    cep?: string | null;
     endereco_entrega?: string;
     tipo?: TipoCliente;
     observacoes?: string;
@@ -142,6 +143,7 @@ export async function create(
     cnpj: cnpjNorm,
     fone: data.fone ?? null,
     email: data.email ?? null,
+    cep: data.cep ?? null,
     endereco_entrega: data.endereco_entrega ?? null,
     tipo,
     observacoes: data.observacoes ?? null,
@@ -159,6 +161,7 @@ export async function update(
     cnpj?: string | null;
     fone?: string;
     email?: string;
+    cep?: string | null;
     endereco_entrega?: string;
     tipo?: TipoCliente;
     observacoes?: string;
@@ -208,6 +211,7 @@ export async function update(
   if (data.cnpj !== undefined) updateData.cnpj = cnpjNorm;
   if (data.fone !== undefined) updateData.fone = data.fone ?? null;
   if (data.email !== undefined) updateData.email = data.email ?? null;
+  if (data.cep !== undefined) updateData.cep = data.cep ?? null;
   if (data.endereco_entrega !== undefined) updateData.endereco_entrega = data.endereco_entrega ?? null;
   if (data.tipo !== undefined) updateData.tipo = data.tipo;
   if (data.observacoes !== undefined) updateData.observacoes = data.observacoes ?? null;

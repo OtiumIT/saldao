@@ -6,3 +6,6 @@ tmp/
 .env.local
 .env.production
 *.env.production
+
+# Dados sensíveis de scripts
+scripts/data-import/ceps-clientes.csv

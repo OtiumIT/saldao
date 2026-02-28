@@ -9,6 +9,7 @@ export interface Cliente {
   cnpj: string | null;
   fone: string | null;
   email: string | null;
+  cep: string | null;
   endereco_entrega: string | null;
   tipo: TipoCliente;
   observacoes: string | null;
@@ -38,7 +39,7 @@ export async function list(): Promise<Cliente[]> {
   const pool = getPool();
   if (!pool) return [];
   const { rows } = await pool.query<Cliente>(
-    'SELECT id, nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes ORDER BY tipo, nome'
+    'SELECT id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes ORDER BY created_at DESC'
   );
   return rows;
 }
@@ -47,7 +48,7 @@ export async function findByCpf(cpfNormalized: string): Promise<Cliente | null> 
   const pool = getPool();
   if (!pool) return null;
   const { rows } = await pool.query<Cliente>(
-    'SELECT id, nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes WHERE cpf = $1 LIMIT 1',
+    'SELECT id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes WHERE cpf = $1 LIMIT 1',
     [cpfNormalized]
   );
   return rows[0] ?? null;
@@ -57,7 +58,7 @@ export async function findByCnpj(cnpjNormalized: string): Promise<Cliente | null
   const pool = getPool();
   if (!pool) return null;
   const { rows } = await pool.query<Cliente>(
-    'SELECT id, nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes WHERE cnpj = $1 LIMIT 1',
+    'SELECT id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes WHERE cnpj = $1 LIMIT 1',
     [cnpjNormalized]
   );
   return rows[0] ?? null;
@@ -67,7 +68,7 @@ export async function findByEmail(emailNormalized: string): Promise<Cliente | nu
   const pool = getPool();
   if (!pool) return null;
   const { rows } = await pool.query<Cliente>(
-    'SELECT id, nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes WHERE LOWER(TRIM(email)) = $1 AND email IS NOT NULL AND email != \'\' LIMIT 1',
+    'SELECT id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes WHERE LOWER(TRIM(email)) = $1 AND email IS NOT NULL AND email != \'\' LIMIT 1',
     [emailNormalized]
   );
   return rows[0] ?? null;
@@ -77,7 +78,7 @@ export async function findByFoneNormalized(foneDigits: string): Promise<Cliente 
   const pool = getPool();
   if (!pool || foneDigits.length < 10) return null;
   const { rows } = await pool.query<Cliente>(
-    `SELECT id, nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes, created_at, updated_at
+    `SELECT id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at
      FROM clientes WHERE regexp_replace(COALESCE(fone,''), '\D', '', 'g') = $1 LIMIT 1`,
     [foneDigits]
   );
@@ -92,7 +93,7 @@ export async function searchByQuery(q: string): Promise<Cliente[]> {
   if (!pool) return [];
   const pattern = `%${trimmed.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
   const { rows } = await pool.query<Cliente>(
-    `SELECT id, nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes, created_at, updated_at
+    `SELECT id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at
      FROM clientes WHERE nome ILIKE $1 ORDER BY nome LIMIT 20`,
     [pattern]
   );
@@ -109,7 +110,7 @@ export async function findByIdentifier(digits: string): Promise<Cliente | null> 
     const pool = getPool();
     if (!pool) return null;
     const { rows } = await pool.query<Cliente>(
-      `SELECT id, nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes, created_at, updated_at
+      `SELECT id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at
        FROM clientes WHERE regexp_replace(COALESCE(fone,''), '\D', '', 'g') = $1 LIMIT 1`,
       [digits]
     );
@@ -118,7 +119,7 @@ export async function findByIdentifier(digits: string): Promise<Cliente | null> 
   const pool = getPool();
   if (!pool) return null;
   const { rows } = await pool.query<Cliente>(
-    `SELECT id, nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes, created_at, updated_at
+    `SELECT id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at
      FROM clientes WHERE regexp_replace(COALESCE(fone,''), '\D', '', 'g') = $1 LIMIT 1`,
     [digits]
   );
@@ -129,7 +130,7 @@ export async function findById(id: string): Promise<Cliente | null> {
   const pool = getPool();
   if (!pool) return null;
   const { rows } = await pool.query<Cliente>(
-    'SELECT id, nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes WHERE id = $1',
+    'SELECT id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes WHERE id = $1',
     [id]
   );
   return rows[0] ?? null;
@@ -139,7 +140,7 @@ export async function findLoja(): Promise<Cliente | null> {
   const pool = getPool();
   if (!pool) return null;
   const { rows } = await pool.query<Cliente>(
-    "SELECT id, nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes WHERE tipo = 'loja' LIMIT 1"
+    "SELECT id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes WHERE tipo = 'loja' LIMIT 1"
   );
   return rows[0] ?? null;
 }
@@ -152,7 +153,7 @@ export async function count(): Promise<number> {
   return parseInt(rows[0]?.count ?? '0', 10);
 }
 
-export async function create(data: { nome: string; cpf?: string | null; cnpj?: string | null; fone?: string; email?: string; endereco_entrega?: string; tipo?: TipoCliente; observacoes?: string }): Promise<Cliente> {
+export async function create(data: { nome: string; cpf?: string | null; cnpj?: string | null; fone?: string; email?: string; cep?: string | null; endereco_entrega?: string; tipo?: TipoCliente; observacoes?: string }): Promise<Cliente> {
   const pool = getPool();
   if (!pool) throw new Error('DATABASE_URL não configurada');
   const tipo = data.tipo ?? 'externo';
@@ -181,15 +182,15 @@ export async function create(data: { nome: string; cpf?: string | null; cnpj?: s
     if (existing) throw new Error('Já existe um cliente com este telefone/WhatsApp.');
   }
   const { rows } = await pool.query<Cliente>(
-    `INSERT INTO clientes (nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     RETURNING id, nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes, created_at, updated_at`,
-    [data.nome, cpfNorm, cnpjNorm, data.fone ?? null, data.email ?? null, data.endereco_entrega ?? null, tipo, data.observacoes ?? null]
+    `INSERT INTO clientes (nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at`,
+    [data.nome, cpfNorm, cnpjNorm, data.fone ?? null, data.email ?? null, data.cep ?? null, data.endereco_entrega ?? null, tipo, data.observacoes ?? null]
   );
   return rows[0];
 }
 
-export async function update(id: string, data: { nome?: string; cpf?: string | null; cnpj?: string | null; fone?: string; email?: string; endereco_entrega?: string; tipo?: TipoCliente; observacoes?: string }): Promise<Cliente | null> {
+export async function update(id: string, data: { nome?: string; cpf?: string | null; cnpj?: string | null; fone?: string; email?: string; cep?: string | null; endereco_entrega?: string; tipo?: TipoCliente; observacoes?: string }): Promise<Cliente | null> {
   const pool = getPool();
   if (!pool) throw new Error('DATABASE_URL não configurada');
   if (data.tipo === 'loja') {
@@ -228,10 +229,10 @@ export async function update(id: string, data: { nome?: string; cpf?: string | n
   }
   const { rows } = await pool.query<Cliente>(
     `UPDATE clientes SET nome = COALESCE($2, nome), cpf = $3, cnpj = $4, fone = COALESCE($5, fone), email = COALESCE($6, email),
-      endereco_entrega = COALESCE($7, endereco_entrega), tipo = COALESCE($8, tipo), observacoes = COALESCE($9, observacoes), updated_at = NOW()
+      cep = COALESCE($7, cep), endereco_entrega = COALESCE($8, endereco_entrega), tipo = COALESCE($9, tipo), observacoes = COALESCE($10, observacoes), updated_at = NOW()
      WHERE id = $1
-     RETURNING id, nome, cpf, cnpj, fone, email, endereco_entrega, tipo, observacoes, created_at, updated_at`,
-    [id, data.nome ?? null, cpfNorm, cnpjNorm, data.fone ?? null, data.email ?? null, data.endereco_entrega ?? null, tipo, data.observacoes ?? null]
+     RETURNING id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at`,
+    [id, data.nome ?? null, cpfNorm, cnpjNorm, data.fone ?? null, data.email ?? null, data.cep ?? null, data.endereco_entrega ?? null, tipo, data.observacoes ?? null]
   );
   return rows[0] ?? null;
 }

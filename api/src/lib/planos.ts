@@ -11,8 +11,8 @@ export interface PlanLimits {
 }
 
 const LIMITS: Record<PlanId, PlanLimits> = {
-  standard: { maxUsuarios: 3, maxClientesAtivos: 5 },
-  pro: { maxUsuarios: 15, maxClientesAtivos: 50 },
+  standard: { maxUsuarios: 3, maxClientesAtivos: 999999 },
+  pro: { maxUsuarios: 15, maxClientesAtivos: 999999 },
 };
 
 export function getPlanLimits(planId: PlanId): PlanLimits {

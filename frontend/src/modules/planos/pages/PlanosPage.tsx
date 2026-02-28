@@ -24,7 +24,7 @@ export function PlanosPage() {
             <h2 className="text-xl font-semibold text-gray-900">{plano.nome}</h2>
             <ul className="mt-4 space-y-2 text-gray-700">
               <li>Até {plano.maxUsuarios} usuários</li>
-              <li>Até {plano.maxClientesAtivos} clientes ativos</li>
+              <li>Clientes ilimitados</li>
             </ul>
           </div>
         ))}

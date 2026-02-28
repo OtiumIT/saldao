@@ -551,7 +551,7 @@ export function EntregasPage() {
                 onChange={(e) => setReagendarData(e.target.value)}
                 className="w-full min-h-[48px] px-4 py-3 border border-gray-300 rounded-xl text-base touch-manipulation focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
               />
-            </div>
+    </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Novo veículo</label>
               <select
@@ -561,9 +561,9 @@ export function EntregasPage() {
               >
                 <option value="">— Manter ou escolher —</option>
                 {veiculosAtivos.map((v) => (
-                  <option key={v.id} value={v.id}>{v.nome}</option>
-                ))}
-              </select>
+          <option key={v.id} value={v.id}>{v.nome}</option>
+        ))}
+      </select>
             </div>
             <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4">
               <Button variant="secondary" size="md" onClick={() => setModalReagendar(null)} className="flex-1 sm:flex-none">

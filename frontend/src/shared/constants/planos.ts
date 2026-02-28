@@ -18,13 +18,13 @@ export const PLANOS: Plano[] = [
     id: 'standard',
     nome: 'Standard',
     maxUsuarios: 3,
-    maxClientesAtivos: 5,
+    maxClientesAtivos: 999999,
   },
   {
     id: 'pro',
     nome: 'Pro',
     maxUsuarios: 15,
-    maxClientesAtivos: 50,
+    maxClientesAtivos: 999999,
   },
 ];
 

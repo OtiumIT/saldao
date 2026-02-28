@@ -41,9 +41,9 @@ export function ClientForm({ cliente, onSubmit, onCancel, loading = false }: Cli
       setFone(cliente.fone ?? '');
       setEmail(cliente.email ?? '');
       setEnderecoEntrega(cliente.endereco_entrega ?? '');
+      setCep(cliente.cep ?? '');
       setTipo(cliente.tipo);
       setObservacoes(cliente.observacoes ?? '');
-      setCep(''); // CEP não é armazenado; ao editar use o campo para buscar de novo se quiser
     } else {
       setNome('');
       setCpf('');
@@ -87,12 +87,14 @@ export function ClientForm({ cliente, onSubmit, onCancel, loading = false }: Cli
     try {
       const cpfNorm = digitsOnly(cpf).trim() || null;
       const cnpjNorm = digitsOnly(cnpj).trim() || null;
+      const cepNorm = digitsOnly(cep).trim() || null;
       await onSubmit({
         nome: nome.trim(),
         cpf: cpfNorm ?? undefined,
         cnpj: cnpjNorm ?? undefined,
         fone: fone.trim() || undefined,
         email: email.trim() || undefined,
+        cep: cepNorm ?? undefined,
         endereco_entrega: endereco_entrega.trim() || undefined,
         tipo,
         observacoes: observacoes.trim() || undefined,

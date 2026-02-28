@@ -21,6 +21,7 @@ export function mensagemResumoPedido(p: PedidoVendaComItens): string {
   linhas.push(`Data: ${formatDateBR(p.data_pedido)}`);
   linhas.push(`Entrega: ${p.tipo_entrega === 'entrega' ? 'Sim' : 'Retirada'}`);
   if (p.endereco_entrega) linhas.push(`Endereço: ${p.endereco_entrega}`);
+  if (p.cliente_cep?.trim()) linhas.push(`CEP: ${p.cliente_cep.trim()}`);
   linhas.push('');
   linhas.push('*Itens:*');
   (p.itens ?? []).forEach((i) => {
@@ -156,6 +157,7 @@ function buildPedidoHtml(pedido: PedidoVendaComItens): { html: string; fragment:
     <h2 class="section-title">Entrega</h2>
     <div class="row"><span class="label">Tipo</span><span class="value">${pedido.tipo_entrega === 'entrega' ? 'Entrega' : 'Retirada no local'}</span></div>
     ${pedido.endereco_entrega ? `<div class="row"><span class="label">Endereço</span><span class="value">${escapeHtml(pedido.endereco_entrega)}</span></div>` : ''}
+    ${pedido.cliente_cep?.trim() ? `<div class="row"><span class="label">CEP</span><span class="value">${escapeHtml(pedido.cliente_cep.trim())}</span></div>` : ''}
     ${pedido.distancia_km != null && Number(pedido.distancia_km) > 0 ? `<div class="row"><span class="label">Distância</span><span class="value">${Number(pedido.distancia_km)} km</span></div>` : ''}
     ${pedido.valor_frete != null && Number(pedido.valor_frete) > 0 ? `<div class="row"><span class="label">Valor do frete</span><span class="value">R$ ${Number(pedido.valor_frete).toFixed(2)}</span></div>` : ''}
     ${valorExtras > 0 ? `<div class="row"><span class="label">Extras entrega</span><span class="value">R$ ${valorExtras.toFixed(2)}</span></div>` : ''}
