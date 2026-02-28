@@ -7,8 +7,11 @@ import * as vendasService from '../../vendas/services/vendas.service';
 import * as roteirizacaoService from '../../roteirizacao/services/roteirizacao.service';
 import * as financeiroService from '../../financeiro/services/financeiro.service';
 import type { ResumoFinanceiro } from '../../financeiro/types/financeiro.types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { formatNomeFornecedor } from '../../../shared/lib/format-nome';
+import * as estoqueService from '../../estoque/services/estoque.service';
+import * as comprasService from '../../compras/services/compras.service';
+import * as categoriasService from '../../categorias-produto/services/categorias-produto.service';
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -98,9 +101,26 @@ export function DashboardPage() {
   const [loadingGraficos, setLoadingGraficos] = useState(true);
 
   const [relatorioVendas, setRelatorioVendas] = useState<
-    Array<{ fornecedor_nome: string | null; total_item: number; produto_tipo: string }>
+    Array<{
+      fornecedor_nome: string | null;
+      total_item: number;
+      produto_tipo: string;
+      produto_id: string;
+      produto_descricao: string;
+      cliente_nome: string | null;
+      quantidade: number;
+      preco_unitario: number;
+    }>
   >([]);
   const [loadingRelatorio, setLoadingRelatorio] = useState(true);
+
+  const [produtos, setProdutos] = useState<
+    Array<{ id: string; categoria_id: string | null; preco_compra: number; saldo: number }>
+  >([]);
+  const [categorias, setCategorias] = useState<Array<{ id: string; nome: string }>>([]);
+  const [compras, setCompras] = useState<Array<{ data_pedido: string; total: number }>>([]);
+  const [pedidosMesPassado, setPedidosMesPassado] = useState<Array<{ total: number }>>([]);
+  const [loadingAux, setLoadingAux] = useState(true);
 
   const [pendentesEntrega, setPendentesEntrega] = useState<Array<{ id: string; cliente_nome: string | null; endereco_entrega: string | null; total: number }>>([]);
   const [loadingEntregas, setLoadingEntregas] = useState(true);
@@ -127,12 +147,43 @@ export function DashboardPage() {
             fornecedor_nome: l.fornecedor_nome,
             total_item: l.total_item,
             produto_tipo: l.produto_tipo ?? '',
+            produto_id: l.produto_id,
+            produto_descricao: l.produto_descricao,
+            cliente_nome: l.cliente_nome,
+            quantidade: l.quantidade,
+            preco_unitario: l.preco_unitario,
           }))
         )
       )
       .catch(() => setRelatorioVendas([]))
       .finally(() => setLoadingRelatorio(false));
   }, [token, dataGraficosInicio, dataGraficosFim]);
+
+  const { data_inicio: dataMesPassadoInicio, data_fim: dataMesPassadoFim } = useMemo(() => getRangePeriodo('mes_passado'), []);
+
+  useEffect(() => {
+    if (!token) return;
+    setLoadingAux(true);
+    Promise.all([
+      estoqueService.listProdutos(token, true).then((p) =>
+        setProdutos(
+          (p as Array<{ id: string; categoria_id: string | null; preco_compra: number; saldo?: number }>).map((x) => ({
+            id: x.id,
+            categoria_id: x.categoria_id,
+            preco_compra: Number(x.preco_compra ?? 0),
+            saldo: Number(x.saldo ?? 0),
+          }))
+        )
+      ),
+      categoriasService.listCategoriasProduto(token).then(setCategorias),
+      comprasService.listPedidosCompra(token).then((list) =>
+        setCompras(list.map((c) => ({ data_pedido: c.data_pedido, total: Number(c.total ?? 0) })))
+      ),
+      vendasService.listPedidosVenda(token, { data_inicio: dataMesPassadoInicio, data_fim: dataMesPassadoFim }).then((list) =>
+        setPedidosMesPassado(list.filter((p) => p.status !== 'cancelado').map((p) => ({ total: Number(p.total ?? 0) })))
+      ),
+    ]).catch(() => {}).finally(() => setLoadingAux(false));
+  }, [token, dataMesPassadoInicio, dataMesPassadoFim]);
 
   useEffect(() => {
     if (!token) return;
@@ -216,6 +267,135 @@ export function DashboardPage() {
   const countVendasMes = vendasNaoCanceladas.length;
   const countAbaixoMinimo = avisos.length;
   const countPendentesEntrega = pendentesEntrega.length;
+
+  const totalVendasGraficos = useMemo(
+    () => vendasGraficosNaoCanceladas.reduce((s, p) => s + p.total, 0),
+    [vendasGraficosNaoCanceladas]
+  );
+  const ticketMedio =
+    vendasGraficosNaoCanceladas.length > 0 ? totalVendasGraficos / vendasGraficosNaoCanceladas.length : 0;
+
+  const produtosMaisVendidos = useMemo(() => {
+    const map = new Map<string, { descricao: string; total: number }>();
+    relatorioVendas.forEach((l) => {
+      const cur = map.get(l.produto_id);
+      const desc = l.produto_descricao || l.produto_id;
+      const tot = (cur?.total ?? 0) + Number(l.total_item ?? 0);
+      map.set(l.produto_id, { descricao: desc, total: tot });
+    });
+    return [...map.entries()]
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 10)
+      .map(([, v]) => ({ produto: v.descricao.length > 25 ? v.descricao.slice(0, 23) + '…' : v.descricao, total: Math.round(v.total * 100) / 100 }));
+  }, [relatorioVendas]);
+
+  const categoriasMap = useMemo(() => new Map(categorias.map((c) => [c.id, c.nome])), [categorias]);
+  const produtosMap = useMemo(() => new Map(produtos.map((p) => [p.id, p])), [produtos]);
+
+  const vendasPorCategoria = useMemo(() => {
+    const map = new Map<string, number>();
+    relatorioVendas.forEach((l) => {
+      const catId = produtosMap.get(l.produto_id)?.categoria_id;
+      const nome = catId ? categoriasMap.get(catId) ?? 'Sem categoria' : 'Sem categoria';
+      map.set(nome, (map.get(nome) ?? 0) + Number(l.total_item ?? 0));
+    });
+    return [...map.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat, total]) => ({ categoria: cat, total: Math.round(total * 100) / 100 }));
+  }, [relatorioVendas, produtosMap, categoriasMap]);
+
+  const totalVendasMesPassado = useMemo(
+    () => pedidosMesPassado.reduce((s, p) => s + p.total, 0),
+    [pedidosMesPassado]
+  );
+  const comparativoPeriodos = useMemo(
+    () => [
+      { periodo: 'Mês passado', total: Math.round(totalVendasMesPassado * 100) / 100 },
+      { periodo: mesLabel, total: Math.round(totalVendasMes * 100) / 100 },
+    ],
+    [totalVendasMesPassado, totalVendasMes, mesLabel]
+  );
+
+  const topClientes = useMemo(() => {
+    const map = new Map<string, number>();
+    relatorioVendas.forEach((l) => {
+      const nome = l.cliente_nome?.trim() || '—';
+      map.set(nome, (map.get(nome) ?? 0) + Number(l.total_item ?? 0));
+    });
+    return [...map.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([cliente, total]) => ({
+        cliente: cliente.length > 20 ? cliente.slice(0, 18) + '…' : cliente,
+        total: Math.round(total * 100) / 100,
+      }));
+  }, [relatorioVendas]);
+
+  const valorEstoquePorCategoria = useMemo(() => {
+    const map = new Map<string, number>();
+    produtos.forEach((p) => {
+      const valor = p.saldo * p.preco_compra;
+      const cat = p.categoria_id ? (categoriasMap.get(p.categoria_id) ?? 'Outros') : 'Sem categoria';
+      map.set(cat, (map.get(cat) ?? 0) + valor);
+    });
+    return [...map.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([categoria, total]) => ({ categoria, total: Math.round(total * 100) / 100 }));
+  }, [produtos, categoriasMap]);
+
+  const { data_inicio: dataComprasInicio, data_fim: dataComprasFim } = useMemo(() => getRangePeriodo('mes_atual'), []);
+  const totalComprasMes = useMemo(() => {
+    return compras
+      .filter((c) => c.data_pedido >= dataComprasInicio && c.data_pedido <= dataComprasFim)
+      .reduce((s, c) => s + c.total, 0);
+  }, [compras, dataComprasInicio, dataComprasFim]);
+  const comprasVsVendas = useMemo(
+    () => [
+      { tipo: 'Compras', total: Math.round(totalComprasMes * 100) / 100 },
+      { tipo: 'Vendas', total: Math.round(totalVendasMes * 100) / 100 },
+    ],
+    [totalComprasMes, totalVendasMes]
+  );
+
+  const margemPorTipo = useMemo(() => {
+    const map = new Map<string, { receita: number; custo: number }>();
+    relatorioVendas.forEach((l) => {
+      const tipo = l.produto_tipo || 'outros';
+      const prod = produtosMap.get(l.produto_id);
+      const custoUnit = prod?.preco_compra ?? 0;
+      const receita = Number(l.total_item ?? 0);
+      const custo = l.quantidade * custoUnit;
+      const cur = map.get(tipo) ?? { receita: 0, custo: 0 };
+      map.set(tipo, { receita: cur.receita + receita, custo: cur.custo + custo });
+    });
+    return [...map.entries()]
+      .map(([tipo, { receita, custo }]) => {
+        const margem = receita > 0 ? ((receita - custo) / receita) * 100 : 0;
+        return { tipo: tipo.charAt(0).toUpperCase() + tipo.slice(1), margem: Math.round(margem * 10) / 10 };
+      })
+      .filter((x) => x.tipo !== 'Insumos')
+      .sort((a, b) => b.margem - a.margem);
+  }, [relatorioVendas, produtosMap]);
+
+  const entregasPorStatus = useMemo(() => {
+    const map = new Map<string, number>();
+    pedidosGraficos.forEach((p) => {
+      const s = p.status || 'outros';
+      map.set(s, (map.get(s) ?? 0) + 1);
+    });
+    const labels: Record<string, string> = {
+      rascunho: 'Rascunho',
+      confirmado: 'Confirmado',
+      entregue: 'Entregue',
+      cancelado: 'Cancelado',
+    };
+    return [...map.entries()].map(([status, count]) => ({
+      status: labels[status] ?? status,
+      count,
+    }));
+  }, [pedidosGraficos]);
+
+  const CORES_PIE = ['#d97706', '#059669', '#6366f1', '#dc2626', '#94a3b8'];
 
   return (
     <div className="space-y-8">
@@ -409,6 +589,187 @@ export function DashboardPage() {
                 <Bar dataKey="total" fill="#b45309" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Produtos mais vendidos ({periodoLabel})</h2>
+          {loadingRelatorio ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : produtosMaisVendidos.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Nenhuma venda no período</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={produtosMaisVendidos} layout="vertical" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `R$ ${v}`} />
+                <YAxis type="category" dataKey="produto" width={120} tick={{ fontSize: 10 }} />
+                <Tooltip formatter={(v: number | undefined) => [`R$ ${(v ?? 0).toFixed(2)}`, 'Total']} />
+                <Bar dataKey="total" fill="#92400e" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Ticket médio ({periodoLabel})</h2>
+          {loadingGraficos ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : (
+            <div className="h-64 flex flex-col items-center justify-center">
+              <p className="text-3xl font-bold text-amber-600">R$ {ticketMedio.toFixed(2)}</p>
+              <p className="text-sm text-gray-500 mt-2">{vendasGraficosNaoCanceladas.length} pedido(s)</p>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Vendas por categoria ({periodoLabel})</h2>
+          {loadingRelatorio || loadingAux ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : vendasPorCategoria.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Nenhuma venda no período</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie data={vendasPorCategoria} dataKey="total" nameKey="categoria" cx="50%" cy="50%" outerRadius={80}>
+                  {vendasPorCategoria.map((_, i) => (
+                    <Cell key={i} fill={CORES_PIE[i % CORES_PIE.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v: number | undefined) => [`R$ ${(v ?? 0).toFixed(2)}`, 'Total']} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Comparativo: mês passado vs este mês</h2>
+          {loadingVendas || loadingAux ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={comparativoPeriodos} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$ ${v}`} />
+                <Tooltip formatter={(v: number | undefined) => [`R$ ${(v ?? 0).toFixed(2)}`, 'Total']} />
+                <Bar dataKey="total" fill="#d97706" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Top clientes ({periodoLabel})</h2>
+          {loadingRelatorio ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : topClientes.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Nenhuma venda no período</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={topClientes} layout="vertical" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `R$ ${v}`} />
+                <YAxis type="category" dataKey="cliente" width={100} tick={{ fontSize: 10 }} />
+                <Tooltip formatter={(v: number | undefined) => [`R$ ${(v ?? 0).toFixed(2)}`, 'Total']} />
+                <Bar dataKey="total" fill="#78716c" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Valor do estoque por categoria</h2>
+          {loadingAux ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : valorEstoquePorCategoria.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Nenhum produto</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={valorEstoquePorCategoria} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="categoria" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$ ${v}`} />
+                <Tooltip formatter={(v: number | undefined) => [`R$ ${(v ?? 0).toFixed(2)}`, 'Total']} />
+                <Bar dataKey="total" fill="#059669" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Compras x Vendas ({mesLabel})</h2>
+          {loadingAux || loadingVendas ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={comprasVsVendas} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="tipo" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$ ${v}`} />
+                <Tooltip formatter={(v: number | undefined) => [`R$ ${(v ?? 0).toFixed(2)}`, 'Total']} />
+                <Bar dataKey="total" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Margem por tipo ({periodoLabel})</h2>
+          <p className="text-xs text-gray-500 mb-2">Revenda e fabricado</p>
+          {loadingRelatorio || loadingAux ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : margemPorTipo.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Nenhuma venda no período</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={margemPorTipo} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="tipo" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+                <Tooltip formatter={(v: number | undefined) => [`${(v ?? 0).toFixed(1)}%`, 'Margem']} />
+                <Bar dataKey="margem" fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Pedidos por status ({periodoLabel})</h2>
+          {loadingGraficos ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : entregasPorStatus.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Nenhum pedido</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie data={entregasPorStatus} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={80} label>
+                  {entregasPorStatus.map((_, i) => (
+                    <Cell key={i} fill={CORES_PIE[i % CORES_PIE.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Produtos abaixo do mínimo</h2>
+          {loadingAvisos ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : (
+            <div className="h-64 flex flex-col items-center justify-center">
+              <p className={`text-4xl font-bold ${countAbaixoMinimo > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                {countAbaixoMinimo}
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                {countAbaixoMinimo > 0 ? 'produto(s) precisam de compra' : 'Estoque ok'}
+              </p>
+            </div>
           )}
         </div>
         </div>
