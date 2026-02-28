@@ -6,6 +6,7 @@ import { sendEmail, createWelcomeEmail } from '../services/email.service.worker.
 import { getEnv } from '../config/env.worker.js';
 import { logger } from '../lib/logger.js';
 import { validateInput, createUserSchema, updateUserSchema } from '../lib/validators.js';
+import { getPlanLimits } from '../lib/planos.js';
 
 type WorkerContext = { Bindings: Env };
 
@@ -120,7 +121,27 @@ usersRoutes.post('/', async (c) => {
     } else if (!profile.is_super_admin && !profile.company_id) {
       return c.json({ error: 'Usuário não está associado a uma empresa' }, 400);
     }
-    
+
+    // Limite do plano: contar usuários da empresa antes de criar
+    if (targetCompanyId) {
+      const { data: usersInCompany, error: listError } = await supabase.rpc('list_users_by_company', {
+        target_company_id: targetCompanyId,
+      });
+      if (!listError && usersInCompany) {
+        const limits = getPlanLimits(envConfig.planId);
+        const currentCount = usersInCompany.length;
+        if (currentCount >= limits.maxUsuarios) {
+          const nomePlano = envConfig.planId === 'standard' ? 'Standard' : 'Pro';
+          return c.json(
+            {
+              error: `Limite do plano atingido: o plano ${nomePlano} permite até ${limits.maxUsuarios} usuários.`,
+            },
+            403
+          );
+        }
+      }
+    }
+
     // Criar cliente Supabase com SERVICE ROLE KEY (não anon key!)
     // Isso é necessário para criar usuários via admin API
     const supabaseAdmin = getSupabaseClient(c.env);

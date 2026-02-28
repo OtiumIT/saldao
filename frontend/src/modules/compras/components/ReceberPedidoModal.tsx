@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../auth/hooks/useAuth';
+import { formatNomeFornecedor } from '../../../shared/lib/format-nome';
 import * as comprasService from '../services/compras.service';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -60,7 +61,7 @@ export function ReceberPedidoModal({ pedidoId, onClose, onRecebido, receberPedid
 
   return (
     <div className="p-6">
-      <p className="text-sm text-gray-600 mb-4">Fornecedor: <strong>{pedido.fornecedor_nome}</strong>. Informe a quantidade recebida por item. O estoque será atualizado.</p>
+      <p className="text-sm text-gray-600 mb-4">Fornecedor: <strong>{formatNomeFornecedor(pedido.fornecedor_nome) || '—'}</strong>. Informe a quantidade recebida por item. O estoque será atualizado.</p>
       {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2 max-h-64 overflow-y-auto">

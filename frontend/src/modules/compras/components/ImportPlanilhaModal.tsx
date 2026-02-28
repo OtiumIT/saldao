@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
 import { Select } from '../../../components/ui/Select';
+import { formatNomeFornecedor } from '../../../shared/lib/format-nome';
 import { useFornecedores } from '../../fornecedores/hooks/useFornecedores';
 import * as comprasService from '../services/compras.service';
 import type { ImportExcelRow } from '../services/compras.service';
@@ -56,7 +57,7 @@ export function ImportPlanilhaModal({ isOpen, onClose, onSuccess, rows, token }:
       <div className="space-y-4">
         <Select
           label="Fornecedor *"
-          options={[{ value: '', label: '— Selecione —' }, ...fornecedores.map((f) => ({ value: f.id, label: f.nome }))]}
+          options={[{ value: '', label: '— Selecione —' }, ...fornecedores.map((f) => ({ value: f.id, label: formatNomeFornecedor(f.nome) || f.nome }))]}
           value={fornecedorId}
           onChange={(e) => setFornecedorId(e.target.value)}
           required

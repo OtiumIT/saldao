@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatNomeFornecedor } from '../../../shared/lib/format-nome';
 import { useFornecedores } from '../hooks/useFornecedores';
 import { SupplierForm } from '../components/SupplierForm';
 import { Button } from '../../../components/ui/Button';
@@ -97,7 +98,7 @@ export function SuppliersListPage() {
         <DataTable
           data={fornecedores}
           columns={[
-            { key: 'nome', label: 'Nome', sortable: true, filterable: true, sortValue: (f) => f.nome.toLowerCase() },
+            { key: 'nome', label: 'Nome', sortable: true, filterable: true, sortValue: (f) => f.nome.toLowerCase(), render: (f) => formatNomeFornecedor(f.nome) || f.nome },
             { key: 'tipo', label: 'Tipo', sortable: true, render: (f) => (f.tipo ? TIPO_LABEL[f.tipo] : '-'), sortValue: (f) => f.tipo ?? '' },
             { key: 'fone', label: 'Telefone', sortable: true, filterable: true, render: (f) => f.fone ?? '-', sortValue: (f) => f.fone ?? '' },
             { key: 'email', label: 'Email', sortable: true, filterable: true, render: (f) => f.email ?? '-', sortValue: (f) => f.email ?? '' },
@@ -135,7 +136,7 @@ export function SuppliersListPage() {
       <Modal isOpen={!!deletingFornecedor} onClose={() => setDeletingFornecedor(null)} title="Confirmar exclusão">
         <div className="space-y-4">
           <p>
-            Tem certeza que deseja excluir o fornecedor <strong>{deletingFornecedor?.nome}</strong>?
+            Tem certeza que deseja excluir o fornecedor <strong>{formatNomeFornecedor(deletingFornecedor?.nome) || '—'}</strong>?
           </p>
           <div className="flex gap-2 justify-end">
             <Button variant="secondary" onClick={() => setDeletingFornecedor(null)}>Cancelar</Button>

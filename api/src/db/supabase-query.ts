@@ -35,6 +35,14 @@ export async function select<T>(
       } else if (value === undefined) {
         // Ignora undefined
         continue;
+      } else if (key.includes('.') && (key.endsWith('.gte') || key.endsWith('.lte') || key.endsWith('.gt') || key.endsWith('.lt'))) {
+        const [col, op] = key.split('.');
+        const val = typeof value === 'string' ? value : String(value);
+        const isDate = /^\d{4}-\d{2}-\d{2}/.test(val);
+        if (op === 'gte') query = isDate ? query.gte(col, val) : query.gte(col, parseFloat(val));
+        else if (op === 'lte') query = isDate ? query.lte(col, val) : query.lte(col, parseFloat(val));
+        else if (op === 'gt') query = isDate ? query.gt(col, val) : query.gt(col, parseFloat(val));
+        else if (op === 'lt') query = isDate ? query.lt(col, val) : query.lt(col, parseFloat(val));
       } else if (Array.isArray(value)) {
         query = query.in(key, value);
       } else if (typeof value === 'string' && value.includes('%')) {
@@ -106,6 +114,14 @@ export async function selectWithCount<T>(
         query = query.is(key, null);
       } else if (value === undefined) {
         continue;
+      } else if (key.includes('.') && (key.endsWith('.gte') || key.endsWith('.lte') || key.endsWith('.gt') || key.endsWith('.lt'))) {
+        const [col, op] = key.split('.');
+        const val = typeof value === 'string' ? value : String(value);
+        const isDate = /^\d{4}-\d{2}-\d{2}/.test(val);
+        if (op === 'gte') query = isDate ? query.gte(col, val) : query.gte(col, parseFloat(val));
+        else if (op === 'lte') query = isDate ? query.lte(col, val) : query.lte(col, parseFloat(val));
+        else if (op === 'gt') query = isDate ? query.gt(col, val) : query.gt(col, parseFloat(val));
+        else if (op === 'lt') query = isDate ? query.lt(col, val) : query.lt(col, parseFloat(val));
       } else if (Array.isArray(value)) {
         query = query.in(key, value);
       } else if (typeof value === 'string' && value.includes('%')) {

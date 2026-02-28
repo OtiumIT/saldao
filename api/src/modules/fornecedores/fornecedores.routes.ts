@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../types/worker-env.js';
 import { requireAuth } from '../../lib/auth-helper.worker.js';
+import { toTitleCase } from '../../lib/format-nome.js';
 import { fornecedoresService } from './fornecedores.service.js';
 
 type Ctx = { Bindings: Env };
@@ -49,8 +50,9 @@ export const fornecedoresRoutes = new Hono<Ctx>()
     if (!parsed.success) {
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
+    const data = { ...parsed.data, nome: toTitleCase(parsed.data.nome) };
     try {
-      const created = await fornecedoresService.create(c.env, parsed.data);
+      const created = await fornecedoresService.create(c.env, data);
       return c.json(created, 201);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar fornecedor' }, 500);
@@ -65,8 +67,9 @@ export const fornecedoresRoutes = new Hono<Ctx>()
     if (!parsed.success) {
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
+    const data = parsed.data.nome !== undefined ? { ...parsed.data, nome: toTitleCase(parsed.data.nome) } : parsed.data;
     try {
-      const updated = await fornecedoresService.update(c.env, id, parsed.data);
+      const updated = await fornecedoresService.update(c.env, id, data);
       if (!updated) return c.json({ error: 'Fornecedor não encontrado' }, 404);
       return c.json(updated);
     } catch (e) {

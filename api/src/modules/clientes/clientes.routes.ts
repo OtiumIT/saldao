@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../types/worker-env.js';
 import { requireAuth } from '../../lib/auth-helper.worker.js';
+import { getEnv } from '../../config/env.worker.js';
+import { getPlanLimits } from '../../lib/planos.js';
 import { clientesService } from './clientes.service.js';
 
 type Ctx = { Bindings: Env };
@@ -78,6 +80,18 @@ export const clientesRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
+      const envConfig = getEnv(c.env);
+      const limits = getPlanLimits(envConfig.planId);
+      const totalClientes = await clientesService.count(c.env);
+      if (totalClientes >= limits.maxClientesAtivos) {
+        const nomePlano = envConfig.planId === 'standard' ? 'Standard' : 'Pro';
+        return c.json(
+          {
+            error: `Limite do plano atingido: o plano ${nomePlano} permite até ${limits.maxClientesAtivos} clientes ativos.`,
+          },
+          403
+        );
+      }
       const created = await clientesService.create(c.env, parsed.data);
       return c.json(created, 201);
     } catch (e) {

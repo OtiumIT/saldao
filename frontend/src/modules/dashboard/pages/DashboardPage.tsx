@@ -3,37 +3,136 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useAvisosCompra } from '../../avisos-compra/hooks/useAvisosCompra';
 import { useVendas } from '../../vendas/hooks/useVendas';
+import * as vendasService from '../../vendas/services/vendas.service';
 import * as roteirizacaoService from '../../roteirizacao/services/roteirizacao.service';
 import * as financeiroService from '../../financeiro/services/financeiro.service';
 import type { ResumoFinanceiro } from '../../financeiro/types/financeiro.types';
-
-function getMesAtual(): { data_inicio: string; data_fim: string } {
-  const now = new Date();
-  const ano = now.getFullYear();
-  const mes = now.getMonth() + 1;
-  const data_inicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
-  const ultimoDia = new Date(ano, mes, 0).getDate();
-  const data_fim = `${ano}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
-  return { data_inicio, data_fim };
-}
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { formatNomeFornecedor } from '../../../shared/lib/format-nome';
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+function toYMD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export type PeriodoGraficos = '90dias' | 'mes_atual' | 'mes_passado' | 'trimestre';
+
+function getRangePeriodo(periodo: PeriodoGraficos): { data_inicio: string; data_fim: string; label: string } {
+  const now = new Date();
+  const ano = now.getFullYear();
+  const mes = now.getMonth();
+
+  switch (periodo) {
+    case '90dias': {
+      const fim = new Date(now);
+      const inicio = new Date(fim);
+      inicio.setDate(inicio.getDate() - 90);
+      return { data_inicio: toYMD(inicio), data_fim: toYMD(fim), label: 'Últimos 90 dias' };
+    }
+    case 'mes_atual': {
+      const m = mes + 1;
+      const ultimoDia = new Date(ano, mes + 1, 0).getDate();
+      return {
+        data_inicio: `${ano}-${String(m).padStart(2, '0')}-01`,
+        data_fim: `${ano}-${String(m).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`,
+        label: `${MESES[mes]} ${ano}`,
+      };
+    }
+    case 'mes_passado': {
+      const mesAnt = mes === 0 ? 11 : mes - 1;
+      const anoAnt = mes === 0 ? ano - 1 : ano;
+      const ultimoDia = new Date(anoAnt, mesAnt + 1, 0).getDate();
+      const m = mesAnt + 1;
+      return {
+        data_inicio: `${anoAnt}-${String(m).padStart(2, '0')}-01`,
+        data_fim: `${anoAnt}-${String(m).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`,
+        label: `${MESES[mesAnt]} ${anoAnt}`,
+      };
+    }
+    case 'trimestre': {
+      const fim = new Date(now);
+      const inicio = new Date(ano, mes - 2, 1);
+      return {
+        data_inicio: toYMD(inicio),
+        data_fim: toYMD(fim),
+        label: `Últimos 3 meses`,
+      };
+    }
+    default:
+      return getRangePeriodo('90dias');
+  }
+}
+
+const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+const PERIODO_OPCOES: { value: PeriodoGraficos; label: string }[] = [
+  { value: '90dias', label: '90 dias' },
+  { value: 'mes_atual', label: 'Este mês' },
+  { value: 'mes_passado', label: 'Mês passado' },
+  { value: 'trimestre', label: 'Trimestre' },
+];
+
 export function DashboardPage() {
   const { token } = useAuth();
-  const { data_inicio, data_fim } = useMemo(getMesAtual, []);
+  const [periodoGraficos, setPeriodoGraficos] = useState<PeriodoGraficos>('90dias');
+
+  const { data_inicio: dataMesInicio, data_fim: dataMesFim } = useMemo(() => getRangePeriodo('mes_atual'), []);
   const mesLabel = useMemo(() => {
     const m = new Date().getMonth();
     return `${MESES[m]} ${new Date().getFullYear()}`;
   }, []);
 
+  const { data_inicio: dataGraficosInicio, data_fim: dataGraficosFim, label: periodoLabel } = useMemo(
+    () => getRangePeriodo(periodoGraficos),
+    [periodoGraficos]
+  );
+
   const { avisos, loading: loadingAvisos } = useAvisosCompra();
-  const { pedidos: pedidosMes, loading: loadingVendas } = useVendas({ data_inicio, data_fim });
+  const { pedidos: pedidosMes, loading: loadingVendas } = useVendas({ data_inicio: dataMesInicio, data_fim: dataMesFim });
+
+  const [pedidosGraficos, setPedidosGraficos] = useState<Array<{ data_pedido: string; total: number; status: string }>>([]);
+  const [loadingGraficos, setLoadingGraficos] = useState(true);
+
+  const [relatorioVendas, setRelatorioVendas] = useState<
+    Array<{ fornecedor_nome: string | null; total_item: number; produto_tipo: string }>
+  >([]);
+  const [loadingRelatorio, setLoadingRelatorio] = useState(true);
 
   const [pendentesEntrega, setPendentesEntrega] = useState<Array<{ id: string; cliente_nome: string | null; endereco_entrega: string | null; total: number }>>([]);
   const [loadingEntregas, setLoadingEntregas] = useState(true);
   const [resumoFinanceiro, setResumoFinanceiro] = useState<ResumoFinanceiro | null>(null);
   const [loadingFinanceiro, setLoadingFinanceiro] = useState(true);
+
+  useEffect(() => {
+    if (!token) return;
+    setLoadingGraficos(true);
+    vendasService
+      .listPedidosVenda(token, { data_inicio: dataGraficosInicio, data_fim: dataGraficosFim })
+      .then((list) => setPedidosGraficos(list.map((p) => ({ data_pedido: p.data_pedido, total: Number(p.total ?? 0), status: p.status }))))
+      .catch(() => setPedidosGraficos([]))
+      .finally(() => setLoadingGraficos(false));
+  }, [token, dataGraficosInicio, dataGraficosFim]);
+
+  useEffect(() => {
+    if (!token) return;
+    vendasService
+      .getRelatorioVendas(token, { data_inicio: dataGraficosInicio, data_fim: dataGraficosFim, incluir_rascunho: true })
+      .then((res) =>
+        setRelatorioVendas(
+          res.linhas.map((l) => ({
+            fornecedor_nome: l.fornecedor_nome,
+            total_item: l.total_item,
+            produto_tipo: l.produto_tipo ?? '',
+          }))
+        )
+      )
+      .catch(() => setRelatorioVendas([]))
+      .finally(() => setLoadingRelatorio(false));
+  }, [token, dataGraficosInicio, dataGraficosFim]);
 
   useEffect(() => {
     if (!token) return;
@@ -47,16 +146,69 @@ export function DashboardPage() {
   useEffect(() => {
     if (!token) return;
     financeiroService
-      .getResumo(token, data_inicio, data_fim)
+      .getResumo(token, dataMesInicio, dataMesFim)
       .then(setResumoFinanceiro)
       .catch(() => setResumoFinanceiro(null))
       .finally(() => setLoadingFinanceiro(false));
-  }, [token, data_inicio, data_fim]);
+  }, [token, dataMesInicio, dataMesFim]);
 
   const vendasNaoCanceladas = useMemo(
     () => pedidosMes.filter((p) => p.status !== 'cancelado'),
     [pedidosMes]
   );
+
+  const vendasGraficosNaoCanceladas = useMemo(
+    () => pedidosGraficos.filter((p) => p.status !== 'cancelado'),
+    [pedidosGraficos]
+  );
+
+  const vendasPorDia = useMemo(() => {
+    const map = new Map<string, number>();
+    vendasGraficosNaoCanceladas.forEach((p) => {
+      const d = p.data_pedido;
+      map.set(d, (map.get(d) ?? 0) + Number(p.total ?? 0));
+    });
+    const dias = [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    return dias.map(([data, total]) => ({
+      data: `${data.slice(8, 10)}/${data.slice(5, 7)}`,
+      total: Math.round(total * 100) / 100,
+    }));
+  }, [vendasGraficosNaoCanceladas]);
+
+  const vendasPorFornecedor = useMemo(() => {
+    const revendaOuFabricado = relatorioVendas.filter(
+      (l) => l.produto_tipo === 'revenda' || l.produto_tipo === 'fabricado'
+    );
+    const map = new Map<string, number>();
+    revendaOuFabricado.forEach((l) => {
+      const nome = formatNomeFornecedor(l.fornecedor_nome) || '—';
+      map.set(nome, (map.get(nome) ?? 0) + Number(l.total_item ?? 0));
+    });
+    return [...map.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([fornecedor, total]) => ({
+        fornecedor: fornecedor.length > 20 ? fornecedor.slice(0, 18) + '…' : fornecedor,
+        total: Math.round(total * 100) / 100,
+      }));
+  }, [relatorioVendas]);
+
+  const vendasPorDiaSemana = useMemo(() => {
+    const pedidosValidos = vendasGraficosNaoCanceladas;
+    const map = new Map<number, number>();
+    for (let i = 0; i < 7; i++) map.set(i, 0);
+    pedidosValidos.forEach((p) => {
+      const d = new Date(p.data_pedido + 'T12:00:00');
+      const dia = d.getDay();
+      map.set(dia, (map.get(dia) ?? 0) + p.total);
+    });
+    return [...map.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([dia, total]) => ({
+        dia: DIAS_SEMANA[dia],
+        total: Math.round(total * 100) / 100,
+      }));
+  }, [vendasGraficosNaoCanceladas]);
+
   const totalVendasMes = useMemo(
     () => vendasNaoCanceladas.reduce((s, p) => s + Number(p.total ?? 0), 0),
     [vendasNaoCanceladas]
@@ -182,6 +334,84 @@ export function DashboardPage() {
           </div>
           <p className="text-xs text-gray-500 mt-3 font-medium">Ver resumo →</p>
         </Link>
+      </div>
+
+      {/* Gráficos de vendas */}
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-gray-600">Período:</span>
+          {PERIODO_OPCOES.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setPeriodoGraficos(opt.value)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                periodoGraficos === opt.value
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Vendas por dia ({periodoLabel})</h2>
+          {loadingGraficos ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : vendasPorDia.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Nenhuma venda no período</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={vendasPorDia} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="data" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$ ${v}`} />
+                <Tooltip formatter={(v: number | undefined) => [`R$ ${(v ?? 0).toFixed(2)}`, 'Total']} />
+                <Bar dataKey="total" fill="#d97706" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Dias da semana mais movimentados ({periodoLabel})</h2>
+          {loadingGraficos ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={vendasPorDiaSemana} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$ ${v}`} />
+                <Tooltip formatter={(v: number | undefined) => [`R$ ${(v ?? 0).toFixed(2)}`, 'Total']} />
+                <Bar dataKey="total" fill="#d97706" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">Vendas por fornecedor ({periodoLabel})</h2>
+          <p className="text-xs text-gray-500 mb-2">Revenda e fabricado</p>
+          {loadingRelatorio ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Carregando...</div>
+          ) : vendasPorFornecedor.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-gray-500">Nenhuma venda no período</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={vendasPorFornecedor} layout="vertical" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `R$ ${v}`} />
+                <YAxis type="category" dataKey="fornecedor" width={100} tick={{ fontSize: 10 }} />
+                <Tooltip formatter={(v: number | undefined) => [`R$ ${(v ?? 0).toFixed(2)}`, 'Total']} />
+                <Bar dataKey="total" fill="#b45309" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+        </div>
       </div>
 
       {/* Atalhos rápidos */}

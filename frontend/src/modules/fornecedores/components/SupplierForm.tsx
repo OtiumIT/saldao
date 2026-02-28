@@ -9,6 +9,7 @@ import { ProductForm } from '../../estoque/components/ProductForm';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useFornecedores } from '../hooks/useFornecedores';
 import { useCategoriasProduto } from '../../categorias-produto/hooks/useCategoriasProduto';
+import { formatNomeFornecedor } from '../../../shared/lib/format-nome';
 import type { Fornecedor, CreateFornecedorRequest, TipoFornecedor } from '../types/suppliers.types';
 import type { CreateProdutoRequest } from '../../estoque/types/estoque.types';
 import type { ProdutoComSaldo } from '../../estoque/types/estoque.types';
@@ -97,7 +98,7 @@ export function SupplierForm({ fornecedor, onSubmit, onCancel, loading = false }
 
   useEffect(() => {
     if (fornecedor) {
-      setNome(fornecedor.nome);
+      setNome(formatNomeFornecedor(fornecedor.nome) || fornecedor.nome);
       setFone(fornecedor.fone ?? '');
       setEmail(fornecedor.email ?? '');
       setContato(fornecedor.contato ?? '');
@@ -123,7 +124,7 @@ export function SupplierForm({ fornecedor, onSubmit, onCancel, loading = false }
     setSubmitting(true);
     try {
       await onSubmit({
-        nome: nome.trim(),
+        nome: formatNomeFornecedor(nome.trim()) || nome.trim(),
         fone: fone.trim() || undefined,
         email: email.trim() || undefined,
         contato: contato.trim() || undefined,

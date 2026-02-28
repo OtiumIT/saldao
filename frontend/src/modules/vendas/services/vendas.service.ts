@@ -5,11 +5,39 @@ import type {
   CreatePedidoVendaRequest,
 } from '../types/vendas.types';
 
+export interface ListPedidosVendaParams {
+  status?: string;
+  data_inicio?: string;
+  data_fim?: string;
+  cliente_nome?: string | null;
+  fornecedor_id?: string | null;
+  produto_id?: string | null;
+  incluir_cancelados?: boolean;
+}
+
+export interface TotaisVendas {
+  total_dia: number;
+  total_semana: number;
+  total_mes: number;
+}
+
+export async function getTotaisVendas(token: string): Promise<TotaisVendas> {
+  return apiClient.get<TotaisVendas>('/api/vendas/totais', token);
+}
+
 export async function listPedidosVenda(
   token: string,
-  params?: { status?: string; data_inicio?: string; data_fim?: string }
+  params?: ListPedidosVendaParams
 ): Promise<PedidoVendaComCliente[]> {
-  const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+  if (!params) return apiClient.get<PedidoVendaComCliente[]>('/api/vendas', token);
+  const { incluir_cancelados, ...rest } = params ?? {};
+  const entries = Object.entries(rest).filter(
+    (entry): entry is [string, string] => entry[1] != null && entry[1] !== ''
+  );
+  if (incluir_cancelados === true) {
+    entries.push(['incluir_cancelados', '1']);
+  }
+  const q = entries.length > 0 ? new URLSearchParams(entries).toString() : '';
   return apiClient.get<PedidoVendaComCliente[]>(`/api/vendas${q ? `?${q}` : ''}`, token);
 }
 
@@ -110,6 +138,7 @@ export interface RelatorioVendasParams {
   data_fim: string;
   fornecedor_id?: string | null;
   produto_id?: string | null;
+  incluir_rascunho?: boolean;
 }
 
 export async function getRelatorioVendas(
@@ -122,6 +151,7 @@ export async function getRelatorioVendas(
   });
   if (params.fornecedor_id) q.set('fornecedor_id', params.fornecedor_id);
   if (params.produto_id) q.set('produto_id', params.produto_id);
+  if (params.incluir_rascunho) q.set('incluir_rascunho', 'true');
   return apiClient.get<RelatorioVendasResult>(`/api/vendas/relatorio?${q.toString()}`, token);
 }
 

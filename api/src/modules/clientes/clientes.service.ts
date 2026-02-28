@@ -34,6 +34,12 @@ export const clientesService = {
     }
     return repo.findLoja();
   },
+  count: (env: Env) => {
+    if (useSupabaseDataAPI(env)) {
+      return repoSupabase.count(env);
+    }
+    return repo.count();
+  },
   create: (env: Env, data: Parameters<typeof repo.create>[0]) => {
     if (useSupabaseDataAPI(env)) {
       return repoSupabase.create(env, data);

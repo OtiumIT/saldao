@@ -6,13 +6,9 @@ import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
 import { imprimirRota } from '../lib/rota-print';
 import type { EntregaComPedido, Veiculo } from '../types/roteirizacao.types';
+import { formatDateBR } from '../../../shared/lib/format-date';
 
 type Pendente = { id: string; cliente_nome: string | null; endereco_entrega: string | null; total: number };
-
-function formatarData(d: string): string {
-  const [a, m, di] = d.split('-');
-  return `${di}/${m}/${a}`;
-}
 
 function getRotasPorVeiculo(entregasDoDia: EntregaComPedido[]): Map<string, EntregaComPedido[]> {
   const mapa = new Map<string, EntregaComPedido[]>();
@@ -424,7 +420,7 @@ export function EntregasPage() {
               return (
                 <section key={data} className="w-full">
                   <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4 md:mb-5">
-                    {formatarData(data)}
+                    {formatDateBR(data)}
                   </h2>
                   <div className="flex flex-col gap-6 w-full">
                     {Array.from(rotasPorVeiculo.entries()).map(([veiculoId, lista]) => (

@@ -30,6 +30,8 @@ import { CustosMesPage } from './modules/custos-operacionais/pages/CustosMesPage
 import { CategoriasProdutoPage } from './modules/categorias-produto/pages/CategoriasProdutoPage';
 import { CoresListPage } from './modules/cores/pages/CoresListPage';
 import { ParcelamentoPage } from './modules/parcelamento/pages/ParcelamentoPage';
+import { OpcoesEntregaPage } from './modules/opcoes-entrega/pages/OpcoesEntregaPage';
+import { PlanosPage } from './modules/planos/pages/PlanosPage';
 import { FuncionariosListPage } from './modules/funcionarios/pages/FuncionariosListPage';
 import { FolhaPagamentoPage } from './modules/funcionarios/pages/FolhaPagamentoPage';
 import { DashboardPage } from './modules/dashboard/pages/DashboardPage';
@@ -91,6 +93,8 @@ function App() {
           <Route path="/categorias-produto" element={<ProtectedRoute><CategoriasProdutoPage /></ProtectedRoute>} />
           <Route path="/cores" element={<ProtectedRoute><CoresListPage /></ProtectedRoute>} />
           <Route path="/parcelamento" element={<ProtectedRoute><ParcelamentoPage /></ProtectedRoute>} />
+          <Route path="/opcoes-entrega" element={<ProtectedRoute><OpcoesEntregaPage /></ProtectedRoute>} />
+          <Route path="/planos" element={<ProtectedRoute><PlanosPage /></ProtectedRoute>} />
           <Route path="/estoque/movimentacoes" element={<ProtectedRoute><MovimentacoesPage /></ProtectedRoute>} />
           <Route path="/estoque/conferencia" element={<ProtectedRoute><ConferenciaEstoquePage /></ProtectedRoute>} />
           <Route path="/compras" element={<ProtectedRoute><ComprasListPage /></ProtectedRoute>} />

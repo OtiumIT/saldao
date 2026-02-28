@@ -4,6 +4,7 @@ import type { Env } from '../types/worker-env.js';
 import { sendEmail, createResetPasswordEmail, createWelcomeEmail } from '../services/email.service.worker.js';
 import { getSupabaseClient } from '../lib/auth-helper.worker.js';
 import { getEnv } from '../config/env.worker.js';
+import { getPlanLimits } from '../lib/planos.js';
 import { logger } from '../lib/logger.js';
 import { validateInput, loginSchema, forgotPasswordSchema, resetPasswordSchema } from '../lib/validators.js';
 import { isFixedAuthEnabled, verifyFixedCredentials, createFixedAuthToken, getFixedProfileFromToken } from '../lib/fixed-auth.js';
@@ -289,6 +290,25 @@ authRoutes.post('/create-user', async (c) => {
     // Verificar se o usuário pode criar outros usuários
     if (!currentProfile.can_create_users) {
       return c.json({ error: 'Você não tem permissão para criar usuários' }, 403);
+    }
+
+    // Limite do plano: contar usuários da empresa antes de criar
+    const companyId = currentProfile.company_id;
+    if (companyId) {
+      const { data: usersInCompany } = await supabase.rpc('list_users_by_company', {
+        target_company_id: companyId,
+      });
+      const limits = getPlanLimits(envConfig.planId);
+      const currentCount = (usersInCompany || []).length;
+      if (currentCount >= limits.maxUsuarios) {
+        const nomePlano = envConfig.planId === 'standard' ? 'Standard' : 'Pro';
+        return c.json(
+          {
+            error: `Limite do plano atingido: o plano ${nomePlano} permite até ${limits.maxUsuarios} usuários.`,
+          },
+          403
+        );
+      }
     }
 
     const { name, email, password, role, can_create_users } = await c.req.json();

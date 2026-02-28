@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useClients } from '../hooks/useClients';
+import { usePlanLimits } from '../../../shared/hooks/usePlanLimits';
 import { ClientForm } from '../components/ClientForm';
 import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
@@ -8,6 +9,8 @@ import type { Cliente, CreateClienteRequest, UpdateClienteRequest } from '../typ
 
 export function ClientsListPage() {
   const { clientes, loading, error, createCliente, updateCliente, deleteCliente } = useClients();
+  const { limits } = usePlanLimits();
+  const atClientLimit = limits != null && clientes.length >= limits.maxClientesAtivos;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | undefined>();
   const [deletingCliente, setDeletingCliente] = useState<Cliente | null>(null);
@@ -57,15 +60,27 @@ export function ClientsListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
-        <Button onClick={handleCreate}>Novo Cliente</Button>
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
+          {limits != null && (
+            <p className="text-sm text-gray-500 mt-0.5">
+              {clientes.length} / {limits.maxClientesAtivos} clientes ativos
+              {atClientLimit && ' — Limite do plano atingido'}
+            </p>
+          )}
+        </div>
+        <Button onClick={handleCreate} disabled={atClientLimit} title={atClientLimit ? 'Limite do plano atingido' : undefined}>
+          Novo Cliente
+        </Button>
       </div>
 
       {clientes.length === 0 && !loading ? (
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <p className="text-gray-500 mb-4">Nenhum cliente cadastrado</p>
-          <Button onClick={handleCreate}>Criar primeiro cliente</Button>
+          <Button onClick={handleCreate} disabled={atClientLimit} title={atClientLimit ? 'Limite do plano atingido' : undefined}>
+            Criar primeiro cliente
+          </Button>
         </div>
       ) : (
         <DataTable

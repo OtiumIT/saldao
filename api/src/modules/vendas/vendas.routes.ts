@@ -14,6 +14,11 @@ const itemSchema = z.object({
   preco_unitario: z.number().min(0),
 });
 
+const opcaoEntregaSelecionadaSchema = z.object({
+  opcao_id: z.string().uuid(),
+  andar: z.number().int().min(0).optional(),
+});
+
 const createSchema = z.object({
   cliente_id: z.string().uuid().nullable().optional(),
   data_pedido: z.string().optional(),
@@ -25,6 +30,8 @@ const createSchema = z.object({
   valor_frete: z.number().min(0).nullable().optional(),
   parcelas: z.number().int().min(1).nullable().optional(),
   taxa_parcelamento_percentual: z.number().min(0).max(100).nullable().optional(),
+  opcoes_entrega_selecionadas: z.array(opcaoEntregaSelecionadaSchema).optional(),
+  valor_extras_livre: z.number().min(0).nullable().optional(),
   itens: z.array(itemSchema).min(1, 'Pelo menos um item'),
 });
 
@@ -72,14 +79,36 @@ export const vendasRoutes = new Hono<Ctx>()
       return c.json({ error: e instanceof Error ? e.message : 'Erro' }, 500);
     }
   })
+  .get('/totais', async (c) => {
+    const auth = await requireAuth(c);
+    if (auth instanceof Response) return auth;
+    try {
+      const totais = await vendasService.getTotais(c.env);
+      return c.json(totais);
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : 'Erro ao obter totais' }, 500);
+    }
+  })
   .get('/', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
     const status = c.req.query('status');
     const data_inicio = c.req.query('data_inicio');
     const data_fim = c.req.query('data_fim');
+    const cliente_nome = c.req.query('cliente_nome');
+    const fornecedor_id = c.req.query('fornecedor_id');
+    const produto_id = c.req.query('produto_id');
+    const incluir_cancelados = c.req.query('incluir_cancelados') === '1' || c.req.query('incluir_cancelados') === 'true';
     try {
-      const list = await vendasService.list(c.env, { status, data_inicio, data_fim });
+      const list = await vendasService.list(c.env, {
+        status,
+        data_inicio: data_inicio || undefined,
+        data_fim: data_fim || undefined,
+        cliente_nome: cliente_nome || undefined,
+        fornecedor_id: fornecedor_id || undefined,
+        produto_id: produto_id || undefined,
+        incluir_cancelados,
+      });
       return c.json(list);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao listar' }, 500);
@@ -111,6 +140,7 @@ export const vendasRoutes = new Hono<Ctx>()
     const mes = c.req.query('mes');
     const fornecedor_id = c.req.query('fornecedor_id') || undefined;
     const produto_id = c.req.query('produto_id') || undefined;
+    const incluir_rascunho = c.req.query('incluir_rascunho') === 'true';
     let dataInicio: string;
     let dataFim: string;
     if (mes && /^\d{4}-\d{2}$/.test(mes)) {
@@ -130,6 +160,7 @@ export const vendasRoutes = new Hono<Ctx>()
         data_fim: dataFim,
         fornecedor_id: fornecedor_id && fornecedor_id.trim() ? fornecedor_id.trim() : null,
         produto_id: produto_id && produto_id.trim() ? produto_id.trim() : null,
+        incluir_rascunho,
       });
       return c.json(result);
     } catch (e) {

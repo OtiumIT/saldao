@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../auth/hooks/useAuth';
 import * as vendasService from '../services/vendas.service';
+import { formatNomeFornecedor } from '../../../shared/lib/format-nome';
 import * as fornecedoresService from '../../fornecedores/services/fornecedores.service';
 import * as estoqueService from '../../estoque/services/estoque.service';
 import { Button } from '../../../components/ui/Button';
@@ -8,6 +9,7 @@ import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { DataTable } from '../../../components/ui/DataTable';
 import type { RelatorioVendasResult, LinhaRelatorioVendas } from '../services/vendas.service';
+import { formatDateBR } from '../../../shared/lib/format-date';
 
 const MESES: { value: string; label: string }[] = (() => {
   const out: { value: string; label: string }[] = [];
@@ -20,12 +22,6 @@ const MESES: { value: string; label: string }[] = (() => {
   }
   return out;
 })();
-
-function formatDate(s: string): string {
-  if (!s) return '—';
-  const d = new Date(s + 'T12:00:00');
-  return d.toLocaleDateString('pt-BR');
-}
 
 function formatMoney(n: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
@@ -47,7 +43,7 @@ export function RelatorioVendasPage() {
   const loadFornecedores = async () => {
     if (!token) return;
     try {
-      const list = await fornecedoresService.listFornecedores(token, 'revenda');
+      const list = await fornecedoresService.listFornecedores(token);
       setFornecedores(list.map((f) => ({ id: f.id, nome: f.nome })));
     } catch {
       setFornecedores([]);
@@ -123,7 +119,7 @@ export function RelatorioVendasPage() {
 
   const fornecedorOptions = [
     { value: '', label: '— Todos os fornecedores —' },
-    ...fornecedores.map((f) => ({ value: f.id, label: f.nome })),
+    ...fornecedores.map((f) => ({ value: f.id, label: formatNomeFornecedor(f.nome) || f.nome })),
   ];
   const produtoOptions = [
     { value: '', label: '— Todos os produtos —' },
@@ -135,7 +131,7 @@ export function RelatorioVendasPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Relatório de vendas</h1>
         <p className="text-gray-600 text-sm mt-1">
-          Período por data início/fim ou por mês. Filtros opcionais: fornecedor (revendas) e produto. Apenas pedidos confirmados ou entregues.
+          Período por data início/fim ou por mês. Filtros opcionais: fornecedor e produto. Apenas pedidos confirmados ou entregues.
         </p>
       </div>
 
@@ -172,7 +168,7 @@ export function RelatorioVendasPage() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor (revendas)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor</label>
             <Select
               options={fornecedorOptions}
               value={fornecedorId}
@@ -217,7 +213,7 @@ export function RelatorioVendasPage() {
 
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <h2 className="text-lg font-semibold text-gray-900 p-4 border-b border-gray-200">
-              Detalhamento ({result.periodo.data_inicio} a {result.periodo.data_fim})
+              Detalhamento ({formatDateBR(result.periodo.data_inicio)} a {formatDateBR(result.periodo.data_fim)})
             </h2>
             {result.linhas.length === 0 ? (
               <p className="p-6 text-gray-500 text-center">Nenhum item no período com os filtros aplicados.</p>
@@ -225,13 +221,13 @@ export function RelatorioVendasPage() {
               <DataTable
                 data={result.linhas}
                 columns={[
-                  { key: 'data_pedido', label: 'Data', render: (r: LinhaRelatorioVendas) => formatDate(r.data_pedido), sortValue: (r: LinhaRelatorioVendas) => r.data_pedido, sortable: true },
+                  { key: 'data_pedido', label: 'Data', render: (r: LinhaRelatorioVendas) => formatDateBR(r.data_pedido), sortValue: (r: LinhaRelatorioVendas) => r.data_pedido, sortable: true },
                   { key: 'pedido_id', label: 'Pedido', render: (r: LinhaRelatorioVendas) => r.pedido_id.slice(0, 8), sortValue: (r: LinhaRelatorioVendas) => r.pedido_id, sortable: true },
                   { key: 'cliente_nome', label: 'Cliente', render: (r: LinhaRelatorioVendas) => r.cliente_nome ?? '—', sortValue: (r: LinhaRelatorioVendas) => (r.cliente_nome ?? '').toLowerCase(), sortable: true },
                   { key: 'produto_codigo', label: 'Código', sortValue: (r: LinhaRelatorioVendas) => r.produto_codigo, sortable: true },
                   { key: 'produto_descricao', label: 'Descrição', render: (r: LinhaRelatorioVendas) => r.produto_descricao, sortValue: (r: LinhaRelatorioVendas) => r.produto_descricao.toLowerCase(), sortable: true },
                   { key: 'produto_tipo', label: 'Tipo', sortValue: (r: LinhaRelatorioVendas) => r.produto_tipo, sortable: true },
-                  { key: 'fornecedor_nome', label: 'Fornecedor', render: (r: LinhaRelatorioVendas) => r.fornecedor_nome ?? '—', sortValue: (r: LinhaRelatorioVendas) => (r.fornecedor_nome ?? '').toLowerCase(), sortable: true },
+                  { key: 'fornecedor_nome', label: 'Fornecedor', render: (r: LinhaRelatorioVendas) => formatNomeFornecedor(r.fornecedor_nome) || '—', sortValue: (r: LinhaRelatorioVendas) => (r.fornecedor_nome ?? '').toLowerCase(), sortable: true },
                   { key: 'quantidade', label: 'Qtd', render: (r: LinhaRelatorioVendas) => Number(r.quantidade).toLocaleString('pt-BR'), sortValue: (r: LinhaRelatorioVendas) => r.quantidade, sortable: true },
                   { key: 'preco_unitario', label: 'Preço unit.', render: (r: LinhaRelatorioVendas) => formatMoney(r.preco_unitario), sortValue: (r: LinhaRelatorioVendas) => r.preco_unitario, sortable: true },
                   { key: 'total_item', label: 'Total', render: (r: LinhaRelatorioVendas) => formatMoney(r.total_item), sortValue: (r: LinhaRelatorioVendas) => r.total_item, sortable: true },

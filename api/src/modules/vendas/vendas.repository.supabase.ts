@@ -16,23 +16,67 @@ import type {
   ItemSugerido,
   LinhaRelatorioVendas,
   RelatorioVendasResult,
+  TotaisVendas,
 } from './vendas.repository.js';
 import * as movimentacoesRepo from '../estoque/movimentacoes.repository.supabase.js';
 
 export async function list(
   env: Env,
-  filtros?: { status?: string; data_inicio?: string; data_fim?: string }
+  filtros?: {
+    status?: string;
+    data_inicio?: string;
+    data_fim?: string;
+    cliente_nome?: string | null;
+    fornecedor_id?: string | null;
+    produto_id?: string | null;
+    incluir_cancelados?: boolean;
+  }
 ): Promise<PedidoVendaComCliente[]> {
   const client = getDataClient(env);
   const filters: Record<string, unknown> = {};
-  if (filtros?.status) filters.status = filtros.status;
-  if (filtros?.data_inicio) filters.data_pedido = `>=${filtros.data_inicio}`;
-  if (filtros?.data_fim) filters.data_pedido = `<=${filtros.data_fim}`;
+  if (filtros?.status) {
+    filters.status = filtros.status;
+  } else if (!filtros?.incluir_cancelados) {
+    filters.status = ['rascunho', 'confirmado', 'entregue'];
+  }
+  if (filtros?.data_inicio) filters['data_pedido.gte'] = filtros.data_inicio;
+  if (filtros?.data_fim) filters['data_pedido.lte'] = filtros.data_fim;
 
-  const pedidos = await db.select<PedidoVenda>(client, 'pedidos_venda', {
+  let pedidos = await db.select<PedidoVenda>(client, 'pedidos_venda', {
     filters,
     orderBy: { column: 'data_pedido', ascending: false },
   });
+
+  if (filtros?.fornecedor_id || filtros?.produto_id) {
+    const pedidoIds = new Set(pedidos.map((p) => p.id));
+    const itens = await db.select<{ pedido_venda_id: string; produto_id: string }>(client, 'itens_pedido_venda', {});
+    const itensFiltrados = itens.filter((i) => pedidoIds.has(i.pedido_venda_id));
+    const produtoIds = [...new Set(itensFiltrados.map((i) => i.produto_id))];
+    const produtos = produtoIds.length > 0
+      ? await db.select<{ id: string; tipo: string; fornecedor_principal_id: string | null }>(client, 'produtos', {
+          filters: { id: produtoIds },
+        })
+      : [];
+    const produtosMap = new Map(produtos.map((p) => [p.id, p]));
+    const pfList = filtros.fornecedor_id
+      ? await db.select<{ produto_id: string; fornecedor_id: string }>(client, 'produtos_fornecedores', {
+          filters: { fornecedor_id: filtros.fornecedor_id },
+        })
+      : [];
+    const pfMap = new Set(pfList.map((pf) => pf.produto_id));
+    const pedidoIdsMatch = new Set<string>();
+    for (const it of itensFiltrados) {
+      const pr = produtosMap.get(it.produto_id);
+      if (!pr || (pr.tipo !== 'revenda' && pr.tipo !== 'fabricado')) continue;
+      if (filtros.produto_id && it.produto_id !== filtros.produto_id) continue;
+      if (filtros.fornecedor_id) {
+        const matchFornecedor = pr.fornecedor_principal_id === filtros.fornecedor_id || pfMap.has(it.produto_id);
+        if (!matchFornecedor) continue;
+      }
+      pedidoIdsMatch.add(it.pedido_venda_id);
+    }
+    pedidos = pedidos.filter((p) => pedidoIdsMatch.has(p.id));
+  }
 
   const clienteIds = [...new Set(pedidos.map((p) => p.cliente_id).filter((id): id is string => id !== null))];
   const clientes = clienteIds.length > 0
@@ -40,13 +84,67 @@ export async function list(
         filters: { id: clienteIds },
       })
     : [];
-
   const clientesMap = new Map(clientes.map((c) => [c.id, c]));
 
-  return pedidos.map((p) => ({
+  let result = pedidos.map((p) => ({
     ...p,
     cliente_nome: p.cliente_id ? clientesMap.get(p.cliente_id)?.nome ?? null : null,
   }));
+
+  if (filtros?.cliente_nome && filtros.cliente_nome.trim()) {
+    const q = filtros.cliente_nome.trim().toLowerCase();
+    result = result.filter((p) => (p.cliente_nome ?? '').toLowerCase().includes(q));
+  }
+
+  return result;
+}
+
+function toYMD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function normalizeDataPedido(val: unknown): string {
+  if (!val) return '';
+  if (typeof val === 'string') return val.slice(0, 10);
+  if (val instanceof Date) return toYMD(val);
+  return String(val).slice(0, 10);
+}
+
+export async function getTotais(env: Env): Promise<TotaisVendas> {
+  const safeDefault = { total_dia: 0, total_semana: 0, total_mes: 0 };
+  try {
+    const client = getDataClient(env);
+    const now = new Date();
+    const hoje = toYMD(now);
+    const iniSemana = new Date(now);
+    iniSemana.setDate(iniSemana.getDate() - iniSemana.getDay());
+    const dataIniSemana = toYMD(iniSemana);
+    const iniMes = new Date(now.getFullYear(), now.getMonth(), 1);
+    const dataIniMes = toYMD(iniMes);
+
+    const pedidos = await db.select<PedidoVenda>(client, 'pedidos_venda', {
+      filters: { status: ['confirmado', 'entregue'] },
+    });
+
+    let total_dia = 0;
+    let total_semana = 0;
+    let total_mes = 0;
+    for (const p of pedidos) {
+      const d = normalizeDataPedido((p as { data_pedido?: unknown }).data_pedido);
+      if (!d) continue;
+      const total = Number(p.total ?? 0);
+      if (Number.isNaN(total)) continue;
+      if (d === hoje) total_dia += total;
+      if (d >= dataIniSemana && d <= hoje) total_semana += total;
+      if (d >= dataIniMes && d <= hoje) total_mes += total;
+    }
+    return { total_dia, total_semana, total_mes };
+  } catch {
+    return safeDefault;
+  }
 }
 
 export async function findById(env: Env, id: string): Promise<PedidoVendaComCliente | null> {
@@ -108,6 +206,9 @@ export async function create(
     previsao_entrega_em_dias?: number | null;
     distancia_km?: number | null;
     valor_frete?: number | null;
+    valor_extras_entrega?: number;
+    valor_extras_livre?: number | null;
+    opcoes_entrega_selecionadas?: Array<{ opcao_id: string; andar?: number }> | null;
     parcelas?: number | null;
     taxa_parcelamento_percentual?: number | null;
     itens: Array<{ produto_id: string; quantidade: number; preco_unitario: number }>;
@@ -128,6 +229,7 @@ export async function create(
   }
   const dataPedido = data.data_pedido ?? new Date().toISOString().slice(0, 10);
   const valorFrete = data.valor_frete ?? 0;
+  const valorExtras = data.valor_extras_entrega ?? 0;
 
   // Criar pedido
   const pedidoResult = await db.insert<PedidoVenda>(client, 'pedidos_venda', {
@@ -140,6 +242,9 @@ export async function create(
     previsao_entrega_em_dias: data.previsao_entrega_em_dias ?? null,
     distancia_km: data.distancia_km ?? null,
     valor_frete: valorFrete,
+    valor_extras_entrega: valorExtras,
+    valor_extras_livre: data.valor_extras_livre ?? 0,
+    opcoes_entrega_selecionadas: data.opcoes_entrega_selecionadas ?? null,
     parcelas: data.parcelas ?? null,
     taxa_parcelamento_percentual: data.taxa_parcelamento_percentual ?? null,
     status: 'rascunho',
@@ -162,7 +267,8 @@ export async function create(
     } as any);
   }
 
-  let total = totalItens + valorFrete;
+  const valorExtrasLivre = data.valor_extras_livre ?? 0;
+  let total = totalItens + valorFrete + valorExtras + valorExtrasLivre;
   if (data.parcelas != null && data.parcelas > 1 && data.taxa_parcelamento_percentual != null && data.taxa_parcelamento_percentual > 0) {
     total = Math.round(total * (1 + data.taxa_parcelamento_percentual / 100) * 100) / 100;
   }
@@ -455,11 +561,18 @@ export async function getItensSugeridos(env: Env, produtoId: string, limit = 5):
 
 export async function getRelatorioVendas(
   env: Env,
-  filtros: { data_inicio: string; data_fim: string; fornecedor_id?: string | null; produto_id?: string | null }
+  filtros: {
+    data_inicio: string;
+    data_fim: string;
+    fornecedor_id?: string | null;
+    produto_id?: string | null;
+    incluir_rascunho?: boolean;
+  }
 ): Promise<RelatorioVendasResult> {
   const client = getDataClient(env);
+  const statuses = filtros.incluir_rascunho ? ['rascunho', 'confirmado', 'entregue'] : ['confirmado', 'entregue'];
   const pedidos = await db.select<PedidoVenda & { data_pedido: string }>(client, 'pedidos_venda', {
-    filters: { data_pedido: `>=${filtros.data_inicio}`, status: ['confirmado', 'entregue'] },
+    filters: { data_pedido: `>=${filtros.data_inicio}`, status: statuses },
     orderBy: { column: 'data_pedido', ascending: true },
   });
   const pedidosNoPeriodo = pedidos.filter((p) => p.data_pedido <= filtros.data_fim);

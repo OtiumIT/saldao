@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/hooks/useAuth';
 import * as comprasService from '../services/compras.service';
 import * as estoqueService from '../../estoque/services/estoque.service';
+import { formatNomeFornecedor } from '../../../shared/lib/format-nome';
 import { useFornecedores } from '../../fornecedores/hooks/useFornecedores';
 import { useProdutos } from '../../estoque/hooks/useProdutos';
 import { Button } from '../../../components/ui/Button';
@@ -344,7 +345,7 @@ export function PedidoCompraForm({ pedidoId, initialItens, initialFornecedorId, 
       {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">{error}</div>}
       <Select
         label="Fornecedor *"
-        options={[{ value: '', label: '— Selecione —' }, ...fornecedores.map((f) => ({ value: f.id, label: f.nome }))]}
+        options={[{ value: '', label: '— Selecione —' }, ...fornecedores.map((f) => ({ value: f.id, label: formatNomeFornecedor(f.nome) || f.nome }))]}
         value={fornecedor_id}
         onChange={(e) => setFornecedorId(e.target.value)}
         required

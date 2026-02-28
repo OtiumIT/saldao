@@ -4,6 +4,7 @@ import * as estoqueService from '../services/estoque.service';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
+import { formatNomeFornecedor } from '../../../shared/lib/format-nome';
 import type { ProdutoComSaldo, CreateProdutoRequest, TipoProduto } from '../types/estoque.types';
 
 interface FornecedorOption {
@@ -238,7 +239,7 @@ export function ProductForm({ produto, fornecedores, categorias = [], initialFor
                 key={fid}
                 className="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-200 text-gray-800 text-sm"
               >
-                {f?.nome ?? fid}
+                {formatNomeFornecedor(f?.nome) || fid}
                 <button
                   type="button"
                   onClick={() => setFornecedoresIds((prev) => prev.filter((id) => id !== fid))}
@@ -267,7 +268,7 @@ export function ProductForm({ produto, fornecedores, categorias = [], initialFor
             .filter((f) => !fornecedoresIds.includes(f.id))
             .map((f) => (
               <option key={f.id} value={f.id}>
-                {f.nome}
+                {formatNomeFornecedor(f.nome) || f.nome}
               </option>
             ))}
         </select>

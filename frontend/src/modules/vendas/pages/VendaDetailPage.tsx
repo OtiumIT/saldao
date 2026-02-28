@@ -5,6 +5,7 @@ import { Button } from '../../../components/ui/Button';
 import * as vendasService from '../services/vendas.service';
 import { imprimirPedido, abrirWhatsAppPedido } from '../lib/pedido-print-whatsapp';
 import type { PedidoVendaComItens } from '../types/vendas.types';
+import { formatDateBR } from '../../../shared/lib/format-date';
 
 const STATUS_LABEL: Record<string, string> = {
   rascunho: 'Rascunho',
@@ -62,7 +63,7 @@ export function VendaDetailPage() {
           <Link to="/vendas" className="text-sm text-slate-600 hover:underline mb-1 inline-block">← Vendas</Link>
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Venda #{pedido.id.slice(0, 8)}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {pedido.data_pedido} · {STATUS_LABEL[pedido.status] ?? pedido.status}
+            {formatDateBR(pedido.data_pedido)} · {STATUS_LABEL[pedido.status] ?? pedido.status}
           </p>
         </div>
       </div>
@@ -82,8 +83,14 @@ export function VendaDetailPage() {
             {pedido.valor_frete != null && Number(pedido.valor_frete) > 0 && (
               <div><dt className="text-gray-500">Frete</dt><dd className="font-medium text-gray-900">R$ {Number(pedido.valor_frete).toFixed(2)}</dd></div>
             )}
-            {pedido.observacoes && (
-              <div className="sm:col-span-2"><dt className="text-gray-500">Observações</dt><dd className="text-gray-900">{pedido.observacoes}</dd></div>
+            {pedido.valor_extras_entrega != null && Number(pedido.valor_extras_entrega) > 0 && (
+              <div><dt className="text-gray-500">Extras entrega</dt><dd className="font-medium text-gray-900">R$ {Number(pedido.valor_extras_entrega).toFixed(2)}</dd></div>
+            )}
+            {pedido.valor_extras_livre != null && Number(pedido.valor_extras_livre) > 0 && (
+              <div><dt className="text-gray-500">Outros extras</dt><dd className="font-medium text-gray-900">R$ {Number(pedido.valor_extras_livre).toFixed(2)}</dd></div>
+            )}
+            {pedido.observacoes?.trim() && (
+              <div className="sm:col-span-2"><dt className="text-gray-500">Observações</dt><dd className="text-gray-900">{pedido.observacoes.trim()}</dd></div>
             )}
           </dl>
         </div>

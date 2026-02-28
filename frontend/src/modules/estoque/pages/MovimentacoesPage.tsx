@@ -5,6 +5,7 @@ import { Button } from '../../../components/ui/Button';
 import { DataTable } from '../../../components/ui/DataTable';
 import { Select } from '../../../components/ui/Select';
 import type { MovimentacaoComProduto } from '../types/estoque.types';
+import { formatDateBR } from '../../../shared/lib/format-date';
 
 const TIPO_LABEL: Record<string, string> = {
   entrada: 'Entrada',
@@ -89,7 +90,7 @@ export function MovimentacoesPage() {
       <DataTable
         data={movimentacoes}
         columns={[
-          { key: 'data', label: 'Data', sortable: true, render: (m: MovimentacaoComProduto) => m.data, sortValue: (m) => m.data },
+          { key: 'data', label: 'Data', sortable: true, render: (m: MovimentacaoComProduto) => formatDateBR(m.data), sortValue: (m) => m.data },
           { key: 'tipo', label: 'Tipo', sortable: true, render: (m) => TIPO_LABEL[m.tipo] ?? m.tipo, sortValue: (m) => m.tipo },
           { key: 'produto_codigo', label: 'Código', render: (m) => m.produto_codigo ?? '-', sortValue: (m) => m.produto_codigo ?? '' },
           { key: 'produto_descricao', label: 'Produto', render: (m) => m.produto_descricao ?? '-', sortValue: (m) => m.produto_descricao ?? '' },

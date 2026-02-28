@@ -9,6 +9,7 @@ import { Select } from '../../../components/ui/Select';
 import { Modal } from '../../../components/ui/Modal';
 import { DataTable } from '../../../components/ui/DataTable';
 import type { OrdemComProduto, OrdemProducaoItem, CreateOrdemItem, ConferenciaEstoquePorCorResult } from '../types/producao.types';
+import { formatDateBR } from '../../../shared/lib/format-date';
 import type { Cor } from '../../cores/types/cores.types';
 
 type ModoOrdem = 'simples' | 'itens';
@@ -210,7 +211,7 @@ export function ProducaoOrdensPage() {
   };
 
   const colunas = [
-    { key: 'data_ordem', label: 'Data', sortable: true, render: (o: OrdemComProduto) => o.data_ordem, sortValue: (o: OrdemComProduto) => o.data_ordem },
+    { key: 'data_ordem', label: 'Data', sortable: true, render: (o: OrdemComProduto) => formatDateBR(o.data_ordem), sortValue: (o: OrdemComProduto) => o.data_ordem },
     {
       key: 'produto',
       label: 'Produto',

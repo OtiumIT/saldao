@@ -26,6 +26,7 @@ const nodeEnv: Env = {
   SEND_CONFIRMATION_EMAIL: process.env.SEND_CONFIRMATION_EMAIL,
   CORS_ORIGIN: process.env.CORS_ORIGIN,
   FRONTEND_URL: process.env.FRONTEND_URL,
+  PLANO: process.env.PLANO,
 };
 
 const serverConfig = getEnv(nodeEnv);
@@ -33,6 +34,7 @@ const PORT = Number(process.env.PORT) || 3000;
 
 import { healthRoutes } from './routes/health.routes.js';
 import { authRoutes } from './routes/auth.routes.js';
+import { configRoutes } from './routes/config.routes.js';
 import { usersRoutes } from './routes/users.routes.js';
 import { clientesRoutes } from './modules/clientes/clientes.routes.js';
 import { fornecedoresRoutes } from './modules/fornecedores/fornecedores.routes.js';
@@ -49,6 +51,7 @@ import { categoriasProdutoRoutes } from './modules/categorias-produto/categorias
 import { funcionariosRoutes } from './modules/funcionarios/funcionarios.routes.js';
 import { coresRoutes } from './modules/cores/cores.routes.js';
 import { parcelamentoRoutes } from './modules/parcelamento/parcelamento.routes.js';
+import { opcoesEntregaRoutes } from './modules/opcoes-entrega/opcoes-entrega.routes.js';
 
 const app = new Hono();
 
@@ -65,10 +68,14 @@ app.use('*', cors({
     const allowed = [
       serverConfig.server.corsOrigin,
       'http://localhost:5173',
+      'http://localhost:5174',
       'http://localhost:4055',
       'http://127.0.0.1:5173',
+      'http://127.0.0.1:5174',
       'http://127.0.0.1:4055',
     ].filter(Boolean);
+    // Em dev: aceita qualquer localhost com porta (Vite pode usar 5174, 5175, etc.)
+    if (origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return origin;
     if (origin && allowed.includes(origin)) return origin;
     return serverConfig.server.corsOrigin;
   },
@@ -91,6 +98,7 @@ app.use('/api/auth/*', rateLimiter({
 
 app.route('/health', healthRoutes);
 app.route('/api/auth', authRoutes);
+app.route('/api/config', configRoutes);
 app.route('/api/users', usersRoutes);
 app.route('/api/clientes', clientesRoutes);
 app.route('/api/fornecedores', fornecedoresRoutes);
@@ -107,6 +115,7 @@ app.route('/api/custos-operacionais', custosOperacionaisRoutes);
 app.route('/api/funcionarios', funcionariosRoutes);
 app.route('/api/cores', coresRoutes);
 app.route('/api/parcelamento', parcelamentoRoutes);
+app.route('/api/opcoes-entrega', opcoesEntregaRoutes);
 
 app.get('/', (c) => {
   return c.json({

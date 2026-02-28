@@ -1,4 +1,5 @@
 import type { PedidoVendaComItens } from '../types/vendas.types';
+import { formatDateBR } from '../../../shared/lib/format-date';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -17,7 +18,7 @@ export function whatsappNumber(fone: string | null | undefined): string | null {
 export function mensagemResumoPedido(p: PedidoVendaComItens): string {
   const linhas: string[] = ['*Resumo do pedido*', ''];
   linhas.push(`Cliente: ${p.cliente_nome ?? '—'}`);
-  linhas.push(`Data: ${p.data_pedido}`);
+  linhas.push(`Data: ${formatDateBR(p.data_pedido)}`);
   linhas.push(`Entrega: ${p.tipo_entrega === 'entrega' ? 'Sim' : 'Retirada'}`);
   if (p.endereco_entrega) linhas.push(`Endereço: ${p.endereco_entrega}`);
   linhas.push('');
@@ -29,8 +30,14 @@ export function mensagemResumoPedido(p: PedidoVendaComItens): string {
   if (p.valor_frete != null && Number(p.valor_frete) > 0) {
     linhas.push(`Frete: R$ ${Number(p.valor_frete).toFixed(2)}`);
   }
+  if (p.valor_extras_entrega != null && Number(p.valor_extras_entrega) > 0) {
+    linhas.push(`Extras entrega: R$ ${Number(p.valor_extras_entrega).toFixed(2)}`);
+  }
+  if (p.valor_extras_livre != null && Number(p.valor_extras_livre) > 0) {
+    linhas.push(`Outros extras: R$ ${Number(p.valor_extras_livre).toFixed(2)}`);
+  }
   linhas.push(`*Total: R$ ${Number(p.total).toFixed(2)}*`);
-  if (p.observacoes) linhas.push('', `Obs: ${p.observacoes}`);
+  if (p.observacoes?.trim()) linhas.push('', `Obs: ${p.observacoes.trim()}`);
   return linhas.join('\n');
 }
 
@@ -49,9 +56,10 @@ export function abrirWhatsAppPedido(pedido: PedidoVendaComItens): boolean {
 function buildPedidoHtml(pedido: PedidoVendaComItens): { html: string; fragment: string } {
   const pedidoNum = pedido.id.slice(0, 8).toUpperCase();
   const clienteFone = (pedido as { cliente_fone?: string | null }).cliente_fone;
-  const subtotal = (pedido.valor_frete != null && Number(pedido.valor_frete) > 0)
-    ? Number(pedido.total) - Number(pedido.valor_frete)
-    : Number(pedido.total);
+  const totalItens = (pedido.itens ?? []).reduce((s, i) => s + Number(i.total_item), 0);
+  const valorFrete = pedido.valor_frete != null ? Number(pedido.valor_frete) : 0;
+  const valorExtras = pedido.valor_extras_entrega != null ? Number(pedido.valor_extras_entrega) : 0;
+  const valorExtrasLivre = pedido.valor_extras_livre != null ? Number(pedido.valor_extras_livre) : 0;
 
   const itens = (pedido.itens ?? [])
     .map(
@@ -126,7 +134,7 @@ function buildPedidoHtml(pedido: PedidoVendaComItens): { html: string; fragment:
     <p class="doc-title">Pedido de venda</p>
     <div class="doc-meta">
       <span><strong>Nº do pedido:</strong> ${escapeHtml(pedidoNum)}</span>
-      <span><strong>Data:</strong> ${escapeHtml(pedido.data_pedido)}</span>
+      <span><strong>Data:</strong> ${escapeHtml(formatDateBR(pedido.data_pedido))}</span>
       <span><strong>Status:</strong> ${escapeHtml(status)}</span>
     </div>
   </header>
@@ -139,9 +147,9 @@ function buildPedidoHtml(pedido: PedidoVendaComItens): { html: string; fragment:
 
   <section class="section">
     <h2 class="section-title">Dados da venda</h2>
-    <div class="row"><span class="label">Data do pedido</span><span class="value">${escapeHtml(pedido.data_pedido)}</span></div>
+    <div class="row"><span class="label">Data do pedido</span><span class="value">${escapeHtml(formatDateBR(pedido.data_pedido))}</span></div>
     <div class="row"><span class="label">Status</span><span class="value">${escapeHtml(status)}</span></div>
-    ${pedido.observacoes ? `<div class="row"><span class="label">Observações</span><span class="value">${escapeHtml(pedido.observacoes)}</span></div>` : ''}
+    ${pedido.observacoes?.trim() ? `<div class="row"><span class="label">Observações</span><span class="value">${escapeHtml(pedido.observacoes.trim())}</span></div>` : ''}
   </section>
 
   <section class="section">
@@ -150,6 +158,8 @@ function buildPedidoHtml(pedido: PedidoVendaComItens): { html: string; fragment:
     ${pedido.endereco_entrega ? `<div class="row"><span class="label">Endereço</span><span class="value">${escapeHtml(pedido.endereco_entrega)}</span></div>` : ''}
     ${pedido.distancia_km != null && Number(pedido.distancia_km) > 0 ? `<div class="row"><span class="label">Distância</span><span class="value">${Number(pedido.distancia_km)} km</span></div>` : ''}
     ${pedido.valor_frete != null && Number(pedido.valor_frete) > 0 ? `<div class="row"><span class="label">Valor do frete</span><span class="value">R$ ${Number(pedido.valor_frete).toFixed(2)}</span></div>` : ''}
+    ${valorExtras > 0 ? `<div class="row"><span class="label">Extras entrega</span><span class="value">R$ ${valorExtras.toFixed(2)}</span></div>` : ''}
+    ${valorExtrasLivre > 0 ? `<div class="row"><span class="label">Outros extras</span><span class="value">R$ ${valorExtrasLivre.toFixed(2)}</span></div>` : ''}
     ${pedido.previsao_entrega_em_dias != null && pedido.previsao_entrega_em_dias > 0 ? `<div class="row"><span class="label">Previsão de entrega</span><span class="value">${pedido.previsao_entrega_em_dias} dia(s)</span></div>` : ''}
   </section>
 
@@ -167,7 +177,9 @@ function buildPedidoHtml(pedido: PedidoVendaComItens): { html: string; fragment:
       <tbody>${itens}</tbody>
     </table>
     <div class="totais">
-      ${pedido.valor_frete != null && Number(pedido.valor_frete) > 0 ? `<p>Subtotal (itens): R$ ${subtotal.toFixed(2)}</p><p>Frete: R$ ${Number(pedido.valor_frete).toFixed(2)}</p>` : ''}
+      ${valorFrete > 0 || valorExtras > 0 || valorExtrasLivre > 0
+        ? `<p>Subtotal (itens): R$ ${totalItens.toFixed(2)}</p>${valorFrete > 0 ? `<p>Frete: R$ ${valorFrete.toFixed(2)}</p>` : ''}${valorExtras > 0 ? `<p>Extras entrega: R$ ${valorExtras.toFixed(2)}</p>` : ''}${valorExtrasLivre > 0 ? `<p>Outros extras: R$ ${valorExtrasLivre.toFixed(2)}</p>` : ''}`
+        : ''}
       <p class="total-geral">Total: R$ ${Number(pedido.total).toFixed(2)}</p>
     </div>
   </section>

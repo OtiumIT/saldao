@@ -34,6 +34,9 @@ export interface Env {
   // Server config
   CORS_ORIGIN?: string;
   FRONTEND_URL?: string;
+
+  /** Plano da conta: standard (até 3 usuários, 5 clientes) ou pro (15 usuários, 50 clientes). Default: pro */
+  PLANO?: string;
   
   // KV Namespaces (opcional, para rate limiting)
   RATE_LIMIT?: KVNamespace;

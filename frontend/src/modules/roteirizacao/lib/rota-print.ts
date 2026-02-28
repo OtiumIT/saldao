@@ -1,14 +1,10 @@
 import type { EntregaComPedido } from '../types/roteirizacao.types';
+import { formatDateBR } from '../../../shared/lib/format-date';
 
 function escapeHtml(s: string): string {
   const el = document.createElement('div');
   el.textContent = s;
   return el.innerHTML;
-}
-
-function formatarData(d: string): string {
-  const [a, m, di] = d.split('-');
-  return `${di}/${m}/${a}`;
 }
 
 /**
@@ -38,7 +34,7 @@ function buildRotaHtml(
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <title>Rota de entrega — ${formatarData(dataEntrega)} — Saldão de Móveis Jerusalém</title>
+  <title>Rota de entrega — ${formatDateBR(dataEntrega)} — Saldão de Móveis Jerusalém</title>
   <style>
     /* Economia de tinta: sem preenchimento preto, fontes finas */
     * { box-sizing: border-box; }
@@ -82,7 +78,7 @@ function buildRotaHtml(
     <p class="empresa">Saldão de Móveis Jerusalém</p>
     <p class="doc-title">Rota de entrega</p>
     <div class="doc-meta">
-      <strong>Data:</strong> ${formatarData(dataEntrega)} &nbsp;|&nbsp; <strong>Veículo:</strong> ${escapeHtml(nomeVeiculo)} &nbsp;|&nbsp; <strong>Paradas:</strong> ${lista.length}
+      <strong>Data:</strong> ${formatDateBR(dataEntrega)} &nbsp;|&nbsp; <strong>Veículo:</strong> ${escapeHtml(nomeVeiculo)} &nbsp;|&nbsp; <strong>Paradas:</strong> ${lista.length}
     </div>
   </header>
 
@@ -97,7 +93,7 @@ function buildRotaHtml(
   </table>
 
   <footer class="footer">
-    Saldão de Móveis Jerusalém — Rota ${formatarData(dataEntrega)} — ${escapeHtml(nomeVeiculo)} — ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+    Saldão de Móveis Jerusalém — Rota ${formatDateBR(dataEntrega)} — ${escapeHtml(nomeVeiculo)} — ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
   </footer>
 </body>
 </html>`;

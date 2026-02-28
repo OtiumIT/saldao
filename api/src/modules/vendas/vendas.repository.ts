@@ -47,26 +47,100 @@ export interface ItemPedidoVendaComProduto extends ItemPedidoVenda {
   produto_tipo?: string;
 }
 
-export async function list(filtros?: { status?: string; data_inicio?: string; data_fim?: string }): Promise<PedidoVendaComCliente[]> {
+export async function list(filtros?: {
+  status?: string;
+  data_inicio?: string;
+  data_fim?: string;
+  cliente_nome?: string | null;
+  fornecedor_id?: string | null;
+  produto_id?: string | null;
+  incluir_cancelados?: boolean;
+}): Promise<PedidoVendaComCliente[]> {
   const pool = getPool();
   if (!pool) return [];
-  let sql = `SELECT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
-    c.nome AS cliente_nome FROM pedidos_venda p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE 1=1`;
+  let sql = `SELECT DISTINCT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.valor_extras_entrega::numeric, p.valor_extras_livre::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
+    c.nome AS cliente_nome FROM pedidos_venda p LEFT JOIN clientes c ON c.id = p.cliente_id`;
   const params: unknown[] = [];
   let i = 1;
+
+  if (filtros?.fornecedor_id || filtros?.produto_id) {
+    sql += ` JOIN itens_pedido_venda i ON i.pedido_venda_id = p.id JOIN produtos pr ON pr.id = i.produto_id AND pr.tipo IN ('revenda', 'fabricado')`;
+  }
+  sql += ' WHERE 1=1';
+  if (!filtros?.incluir_cancelados) {
+    sql += ` AND p.status != 'cancelado'`;
+  }
   if (filtros?.status) { sql += ` AND p.status = $${i++}`; params.push(filtros.status); }
   if (filtros?.data_inicio) { sql += ` AND p.data_pedido >= $${i++}`; params.push(filtros.data_inicio); }
   if (filtros?.data_fim) { sql += ` AND p.data_pedido <= $${i++}`; params.push(filtros.data_fim); }
+  if (filtros?.cliente_nome && filtros.cliente_nome.trim()) {
+    sql += ` AND c.nome ILIKE $${i++}`;
+    params.push(`%${filtros.cliente_nome.trim()}%`);
+  }
+  if (filtros?.fornecedor_id) {
+    sql += ` AND (pr.fornecedor_principal_id = $${i} OR EXISTS (SELECT 1 FROM produtos_fornecedores pf WHERE pf.produto_id = pr.id AND pf.fornecedor_id = $${i}))`;
+    params.push(filtros.fornecedor_id);
+    i++;
+  }
+  if (filtros?.produto_id) {
+    sql += ` AND i.produto_id = $${i++}`;
+    params.push(filtros.produto_id);
+  }
   sql += ' ORDER BY p.data_pedido DESC, p.created_at DESC';
   const { rows } = await pool.query<PedidoVendaComCliente>(sql, params);
   return rows;
 }
 
+export interface TotaisVendas {
+  total_dia: number;
+  total_semana: number;
+  total_mes: number;
+}
+
+function toYMD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export async function getTotais(): Promise<TotaisVendas> {
+  const pool = getPool();
+  if (!pool) return { total_dia: 0, total_semana: 0, total_mes: 0 };
+  const now = new Date();
+  const hoje = toYMD(now);
+  const iniSemana = new Date(now);
+  iniSemana.setDate(iniSemana.getDate() - iniSemana.getDay());
+  const dataIniSemana = toYMD(iniSemana);
+  const iniMes = new Date(now.getFullYear(), now.getMonth(), 1);
+  const dataIniMes = toYMD(iniMes);
+
+  try {
+    const { rows } = await pool.query<{ total_dia: string; total_semana: string; total_mes: string }>(
+      `SELECT
+        COALESCE(SUM(CASE WHEN p.data_pedido = $1 THEN p.total ELSE 0 END), 0) AS total_dia,
+        COALESCE(SUM(CASE WHEN p.data_pedido >= $2 AND p.data_pedido <= $1 THEN p.total ELSE 0 END), 0) AS total_semana,
+        COALESCE(SUM(CASE WHEN p.data_pedido >= $3 AND p.data_pedido <= $1 THEN p.total ELSE 0 END), 0) AS total_mes
+      FROM pedidos_venda p
+      WHERE p.status IN ('confirmado', 'entregue')`,
+      [hoje, dataIniSemana, dataIniMes]
+    );
+    const r = rows[0];
+    return {
+      total_dia: Number(r?.total_dia ?? 0),
+      total_semana: Number(r?.total_semana ?? 0),
+      total_mes: Number(r?.total_mes ?? 0),
+    };
+  } catch {
+    return { total_dia: 0, total_semana: 0, total_mes: 0 };
+  }
+}
+
 export async function findById(id: string): Promise<PedidoVendaComCliente | null> {
   const pool = getPool();
   if (!pool) return null;
-  const { rows } = await pool.query<PedidoVendaComCliente & { taxa_parcelamento_percentual: string | null }>(
-    `SELECT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
+  const { rows } = await pool.query<PedidoVendaComCliente & { taxa_parcelamento_percentual: string | null; valor_extras_entrega: string | null }>(
+    `SELECT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.valor_extras_entrega::numeric, p.valor_extras_livre::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
      c.nome AS cliente_nome, c.fone AS cliente_fone FROM pedidos_venda p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE p.id = $1`,
     [id]
   );
@@ -96,6 +170,9 @@ export async function create(data: {
   previsao_entrega_em_dias?: number | null;
   distancia_km?: number | null;
   valor_frete?: number | null;
+  valor_extras_entrega?: number;
+  valor_extras_livre?: number | null;
+  opcoes_entrega_selecionadas?: Array<{ opcao_id: string; andar?: number }> | null;
   parcelas?: number | null;
   taxa_parcelamento_percentual?: number | null;
   itens: Array<{ produto_id: string; quantidade: number; preco_unitario: number }>;
@@ -117,13 +194,18 @@ export async function create(data: {
   }
   const dataPedido = data.data_pedido ?? new Date().toISOString().slice(0, 10);
   const valorFrete = data.valor_frete ?? 0;
+  const valorExtras = data.valor_extras_entrega ?? 0;
+  const valorExtrasLivre = data.valor_extras_livre ?? 0;
+  const opcoesJson = data.opcoes_entrega_selecionadas
+    ? JSON.stringify(data.opcoes_entrega_selecionadas)
+    : null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows: pedRows } = await client.query<PedidoVenda & { taxa_parcelamento_percentual: string | null }>(
-      `INSERT INTO pedidos_venda (cliente_id, data_pedido, tipo_entrega, endereco_entrega, observacoes, total, previsao_entrega_em_dias, distancia_km, valor_frete, parcelas, taxa_parcelamento_percentual)
-       VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9, $10) RETURNING id, cliente_id, data_pedido::text, tipo_entrega, status, endereco_entrega, observacoes, total, previsao_entrega_em_dias, distancia_km::numeric, valor_frete::numeric, parcelas, taxa_parcelamento_percentual::numeric, created_at, updated_at`,
-      [data.cliente_id ?? null, dataPedido, data.tipo_entrega, data.endereco_entrega ?? null, data.observacoes ?? null, data.previsao_entrega_em_dias ?? null, data.distancia_km ?? null, valorFrete, data.parcelas ?? null, data.taxa_parcelamento_percentual ?? null]
+      `INSERT INTO pedidos_venda (cliente_id, data_pedido, tipo_entrega, endereco_entrega, observacoes, total, previsao_entrega_em_dias, distancia_km, valor_frete, valor_extras_entrega, valor_extras_livre, opcoes_entrega_selecionadas, parcelas, taxa_parcelamento_percentual)
+       VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id, cliente_id, data_pedido::text, tipo_entrega, status, endereco_entrega, observacoes, total, previsao_entrega_em_dias, distancia_km::numeric, valor_frete::numeric, parcelas, taxa_parcelamento_percentual::numeric, created_at, updated_at`,
+      [data.cliente_id ?? null, dataPedido, data.tipo_entrega, data.endereco_entrega ?? null, data.observacoes ?? null, data.previsao_entrega_em_dias ?? null, data.distancia_km ?? null, valorFrete, valorExtras, valorExtrasLivre, opcoesJson, data.parcelas ?? null, data.taxa_parcelamento_percentual ?? null]
     );
     const pedido = pedRows[0];
     if (!pedido) throw new Error('Falha ao criar pedido');
@@ -137,7 +219,7 @@ export async function create(data: {
         [pedido.id, it.produto_id, it.quantidade, it.preco_unitario, totalItem]
       );
     }
-    let total = totalItens + valorFrete;
+    let total = totalItens + valorFrete + valorExtras + valorExtrasLivre;
     if (data.parcelas != null && data.parcelas > 1 && data.taxa_parcelamento_percentual != null && data.taxa_parcelamento_percentual > 0) {
       total = Math.round(total * (1 + data.taxa_parcelamento_percentual / 100) * 100) / 100;
     }
@@ -419,6 +501,7 @@ export async function getRelatorioVendas(filtros: {
   data_fim: string;
   fornecedor_id?: string | null;
   produto_id?: string | null;
+  incluir_rascunho?: boolean;
 }): Promise<RelatorioVendasResult> {
   const pool = getPool();
   const linhas: LinhaRelatorioVendas[] = [];
@@ -456,7 +539,7 @@ export async function getRelatorioVendas(filtros: {
     LEFT JOIN clientes c ON c.id = p.cliente_id
     LEFT JOIN fornecedores f ON f.id = pr.fornecedor_principal_id
     WHERE p.data_pedido >= $1 AND p.data_pedido <= $2
-      AND p.status IN ('confirmado', 'entregue')
+      AND p.status IN (${filtros.incluir_rascunho ? "'rascunho', 'confirmado', 'entregue'" : "'confirmado', 'entregue'"})
       ${whereFornecedor}${whereProduto}
     ORDER BY p.data_pedido, p.id, i.created_at`;
   const { rows } = await pool.query<

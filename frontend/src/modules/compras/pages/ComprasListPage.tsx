@@ -10,6 +10,8 @@ import { ReceberPedidoModal } from '../components/ReceberPedidoModal';
 import { ImportPlanilhaModal } from '../components/ImportPlanilhaModal';
 import { parsePlanilhaCompras } from '../lib/parse-planilha-compras';
 import type { PedidoCompraComFornecedor } from '../types/compras.types';
+import { formatDateBR } from '../../../shared/lib/format-date';
+import { formatNomeFornecedor } from '../../../shared/lib/format-nome';
 import type { ImportExcelRow } from '../services/compras.service';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -107,10 +109,10 @@ export function ComprasListPage() {
         <DataTable
           data={pedidos}
           columns={[
-            { key: 'data_pedido', label: 'Data', sortable: true, render: (p) => p.data_pedido, sortValue: (p) => p.data_pedido },
-            { key: 'fornecedor_nome', label: 'Fornecedor', sortable: true, render: (p) => p.fornecedor_nome ?? '-', sortValue: (p) => p.fornecedor_nome ?? '' },
+            { key: 'data_pedido', label: 'Data', sortable: true, render: (p) => formatDateBR(p.data_pedido), sortValue: (p) => p.data_pedido },
+            { key: 'fornecedor_nome', label: 'Fornecedor', sortable: true, render: (p) => formatNomeFornecedor(p.fornecedor_nome) || '-', sortValue: (p) => p.fornecedor_nome ?? '' },
             { key: 'tipo', label: 'Tipo', sortable: true, render: (p) => p.tipo === 'recepcao' ? 'Recepção' : 'Pedido', sortValue: (p) => p.tipo },
-            { key: 'data_prevista_entrega', label: 'Previsão entrega', render: (p) => p.data_prevista_entrega ?? '—', sortValue: (p) => p.data_prevista_entrega ?? '' },
+            { key: 'data_prevista_entrega', label: 'Previsão entrega', render: (p) => formatDateBR(p.data_prevista_entrega), sortValue: (p) => p.data_prevista_entrega ?? '' },
             { key: 'status', label: 'Status', sortable: true, render: (p) => STATUS_LABEL[p.status] ?? p.status, sortValue: (p) => p.status },
             { key: 'total', label: 'Total', sortable: true, render: (p) => `R$ ${Number(p.total).toFixed(2)}`, sortValue: (p) => p.total },
             {

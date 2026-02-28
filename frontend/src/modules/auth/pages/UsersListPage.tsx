@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useUsers } from '../hooks/useUsers';
+import { usePlanLimits } from '../../../shared/hooks/usePlanLimits';
 import { UserManagementForm } from '../components/UserManagementForm';
 import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
@@ -14,6 +15,8 @@ const ROLES: Record<string, string> = {
 
 export function UsersListPage() {
   const { users, companies, loading, error, createUser, updateUser, deleteUser, fetchUsers } = useUsers();
+  const { limits } = usePlanLimits();
+  const atUserLimit = limits != null && users.length >= limits.maxUsuarios;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | undefined>();
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
@@ -83,15 +86,27 @@ export function UsersListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Usuários</h1>
-        <Button onClick={handleCreate}>Novo Usuário</Button>
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Usuários</h1>
+          {limits != null && (
+            <p className="text-sm text-gray-500 mt-0.5">
+              {users.length} / {limits.maxUsuarios} usuários
+              {atUserLimit && ' — Limite do plano atingido'}
+            </p>
+          )}
+        </div>
+        <Button onClick={handleCreate} disabled={atUserLimit} title={atUserLimit ? 'Limite do plano atingido' : undefined}>
+          Novo Usuário
+        </Button>
       </div>
 
       {users.length === 0 && !loading ? (
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <p className="text-gray-500 mb-4">Nenhum usuário cadastrado</p>
-          <Button onClick={handleCreate}>Criar Primeiro Usuário</Button>
+          <Button onClick={handleCreate} disabled={atUserLimit} title={atUserLimit ? 'Limite do plano atingido' : undefined}>
+            Criar Primeiro Usuário
+          </Button>
         </div>
       ) : (
         <DataTable

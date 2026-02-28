@@ -123,6 +123,14 @@ export async function findLoja(): Promise<Cliente | null> {
   return rows[0] ?? null;
 }
 
+/** Retorna a quantidade total de clientes (para limite do plano). */
+export async function count(): Promise<number> {
+  const pool = getPool();
+  if (!pool) return 0;
+  const { rows } = await pool.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM clientes');
+  return parseInt(rows[0]?.count ?? '0', 10);
+}
+
 export async function create(data: { nome: string; cpf?: string | null; cnpj?: string | null; fone?: string; email?: string; endereco_entrega?: string; tipo?: TipoCliente; observacoes?: string }): Promise<Cliente> {
   const pool = getPool();
   if (!pool) throw new Error('DATABASE_URL não configurada');

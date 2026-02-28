@@ -75,6 +75,13 @@ export async function findLoja(env: Env): Promise<Cliente | null> {
   return results[0] ?? null;
 }
 
+/** Retorna a quantidade total de clientes (para limite do plano). */
+export async function count(env: Env): Promise<number> {
+  const client = getDataClient(env);
+  const { count: total } = await db.selectWithCount<Cliente>(client, 'clientes', { limit: 1 });
+  return total;
+}
+
 export async function create(
   env: Env,
   data: {

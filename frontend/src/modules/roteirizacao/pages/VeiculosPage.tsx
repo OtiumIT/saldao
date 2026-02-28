@@ -6,6 +6,7 @@ import { Modal } from '../../../components/ui/Modal';
 import { Input } from '../../../components/ui/Input';
 import { DataTable } from '../../../components/ui/DataTable';
 import type { Veiculo, EntregaComPedido } from '../types/roteirizacao.types';
+import { formatDateBR } from '../../../shared/lib/format-date';
 
 /** Gera link wa.me com número (apenas dígitos) e mensagem opcional. */
 function getWhatsAppUrl(numero: string, mensagem = ''): string {
@@ -255,7 +256,7 @@ export function VeiculosPage() {
               <>
                 <ul className="text-sm border rounded p-2 max-h-40 overflow-y-auto">
                   {modalInoperante.entregasAfetadas.map((e) => (
-                    <li key={e.id}>{e.cliente_nome ?? 'Cliente'} – {e.data_entrega_prevista ?? '?'} – {e.endereco_entrega?.slice(0, 40)}…</li>
+                    <li key={e.id}>{e.cliente_nome ?? 'Cliente'} – {formatDateBR(e.data_entrega_prevista)} – {e.endereco_entrega?.slice(0, 40)}…</li>
                   ))}
                 </ul>
                 <div className="grid grid-cols-2 gap-4">

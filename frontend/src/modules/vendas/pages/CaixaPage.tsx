@@ -8,12 +8,14 @@ import { Select } from '../../../components/ui/Select';
 import { Combobox, type ComboboxOption } from '../../../components/ui/Combobox';
 import * as vendasService from '../services/vendas.service';
 import * as parcelamentoService from '../../parcelamento/services/parcelamento.service';
+import * as opcoesEntregaService from '../../opcoes-entrega/services/opcoes-entrega.service';
 import { baixarPdfPedido, abrirWhatsAppPedido } from '../lib/pedido-print-whatsapp';
 import * as clientesService from '../../clientes/services/clientes.service';
 import type { Cliente, CreateClienteRequest } from '../../clientes/types/clients.types';
-import type { CreatePedidoVendaRequest } from '../types/vendas.types';
+import type { CreatePedidoVendaRequest, OpcaoEntregaSelecionada } from '../types/vendas.types';
 import type { ProdutoComSaldo } from '../../estoque/types/estoque.types';
 import type { OpcaoParcelamento } from '../../parcelamento/types/parcelamento.types';
+import type { OpcaoEntrega } from '../../opcoes-entrega/types/opcoes-entrega.types';
 
 interface CartItem {
   produto_id: string;
@@ -75,6 +77,11 @@ export function CaixaPage() {
   const [errorDistancia, setErrorDistancia] = useState('');
   const [parcelasSelected, setParcelasSelected] = useState<number | null>(null);
   const [opcoesParcelamento, setOpcoesParcelamento] = useState<OpcaoParcelamento[]>([]);
+  const [opcoesEntrega, setOpcoesEntrega] = useState<OpcaoEntrega[]>([]);
+  const [extrasLivreLabel, setExtrasLivreLabel] = useState('Outros extras');
+  const [opcoesEntregaSelecionadas, setOpcoesEntregaSelecionadas] = useState<OpcaoEntregaSelecionada[]>([]);
+  const [andarPorOpcao, setAndarPorOpcao] = useState<Record<string, number>>({});
+  const [valorExtrasLivre, setValorExtrasLivre] = useState('');
 
   const produtoOptions: ComboboxOption[] = useMemo(() => {
     return produtos.map((p) => {
@@ -148,7 +155,25 @@ export function CaixaPage() {
       : acimaDe13
         ? (Number.isNaN(freteManualNum) ? 0 : Math.max(0, freteManualNum))
         : (freteTabela ?? 0);
-  const baseTotal = Math.max(0, subtotalComDesconto + valorFrete);
+  const valorExtras = useMemo(() => {
+    if (tipo_entrega !== 'entrega' || opcoesEntregaSelecionadas.length === 0) return 0;
+    let s = 0;
+    for (const sel of opcoesEntregaSelecionadas) {
+      const opcao = opcoesEntrega.find((o) => o.id === sel.opcao_id);
+      if (!opcao) continue;
+      if (opcao.tipo === 'fixo' && opcao.valor_fixo != null) s += Number(opcao.valor_fixo);
+      else if (opcao.tipo === 'por_andar' && opcao.valor_por_andar != null) {
+        const andar = sel.andar ?? andarPorOpcao[sel.opcao_id] ?? 0;
+        s += Number(opcao.valor_por_andar) * Math.max(0, andar);
+      }
+    }
+    return Math.round(s * 100) / 100;
+  }, [tipo_entrega, opcoesEntregaSelecionadas, opcoesEntrega, andarPorOpcao]);
+  const valorExtrasLivreNum =
+    tipo_entrega === 'entrega' && valorExtrasLivre.trim()
+      ? Math.max(0, parseFloat(valorExtrasLivre.replace(',', '.')) || 0)
+      : 0;
+  const baseTotal = Math.max(0, subtotalComDesconto + valorFrete + valorExtras + valorExtrasLivreNum);
   const opcaoParcelas =
     parcelasSelected != null && parcelasSelected > 1
       ? opcoesParcelamento.find((o) => o.parcelas === parcelasSelected)
@@ -233,6 +258,14 @@ export function CaixaPage() {
         previsao_entrega_em_dias: soFabricadosSemEstoque && previsaoNum >= 1 ? previsaoNum : null,
         distancia_km: tipo_entrega === 'entrega' && !Number.isNaN(kmNum) ? kmNum : null,
         valor_frete: tipo_entrega === 'entrega' ? valorFrete : null,
+        opcoes_entrega_selecionadas:
+          tipo_entrega === 'entrega' && opcoesEntregaSelecionadas.length > 0
+            ? opcoesEntregaSelecionadas.map((s) => ({
+                opcao_id: s.opcao_id,
+                andar: s.andar ?? andarPorOpcao[s.opcao_id],
+              }))
+            : undefined,
+        valor_extras_livre: tipo_entrega === 'entrega' && valorExtrasLivreNum > 0 ? valorExtrasLivreNum : null,
         parcelas: parcelasSelected ?? null,
         taxa_parcelamento_percentual: taxaParaEnvio,
         itens: itensParaEnvio,
@@ -268,6 +301,9 @@ export function CaixaPage() {
       setPrevisaoEntregaEmDias('');
       setDescontoValor('');
       setParcelasSelected(null);
+      setOpcoesEntregaSelecionadas([]);
+      setAndarPorOpcao({});
+      setValorExtrasLivre('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao finalizar venda');
     } finally {
@@ -301,6 +337,12 @@ export function CaixaPage() {
   useEffect(() => {
     if (!token) return;
     parcelamentoService.listOpcoesParcelamento(token).then(setOpcoesParcelamento).catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    opcoesEntregaService.list(token).then((list) => setOpcoesEntrega(list.filter((o) => o.ativo))).catch(() => {});
+    opcoesEntregaService.getConfig('extras_livre_label', token).then((v) => v && setExtrasLivreLabel(v)).catch(() => {});
   }, [token]);
 
   // Ao mudar para Entrega com cliente selecionado, preencher endereço do cadastro
@@ -755,6 +797,78 @@ export function CaixaPage() {
                   )}
                 </div>
               )}
+              {opcoesEntrega.length > 0 && (
+                <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <p className="text-sm font-medium text-slate-700 mb-2">Preços extras da entrega</p>
+                  <div className="space-y-2">
+                    {opcoesEntrega.map((o) => {
+                      const isSelected = opcoesEntregaSelecionadas.some((s) => s.opcao_id === o.id);
+                      const andar = andarPorOpcao[o.id] ?? 0;
+                      return (
+                        <div key={o.id} className="flex flex-wrap items-center gap-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setOpcoesEntregaSelecionadas((prev) => [...prev, { opcao_id: o.id, andar: o.tipo === 'por_andar' ? andar : undefined }]);
+                                } else {
+                                  setOpcoesEntregaSelecionadas((prev) => prev.filter((s) => s.opcao_id !== o.id));
+                                  setAndarPorOpcao((p) => {
+                                    const next = { ...p };
+                                    delete next[o.id];
+                                    return next;
+                                  });
+                                }
+                              }}
+                              className="rounded border-slate-300"
+                            />
+                            <span className="text-sm text-slate-800">
+                              {o.nome}
+                              {o.tipo === 'fixo' && o.valor_fixo != null && (
+                                <span className="text-amber-700 font-medium ml-1">R$ {Number(o.valor_fixo).toFixed(2)}</span>
+                              )}
+                              {o.tipo === 'por_andar' && o.valor_por_andar != null && (
+                                <span className="text-amber-700 font-medium ml-1">R$ {Number(o.valor_por_andar).toFixed(2)}/andar</span>
+                              )}
+                            </span>
+                          </label>
+                          {o.tipo === 'por_andar' && isSelected && (
+                            <div className="flex items-center gap-1 ml-4">
+                              <label className="text-xs text-slate-600">Andares:</label>
+                              <input
+                                type="number"
+                                min={0}
+                                value={andar}
+                                onChange={(e) => {
+                                  const v = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                  setAndarPorOpcao((p) => ({ ...p, [o.id]: v }));
+                                  setOpcoesEntregaSelecionadas((prev) =>
+                                    prev.map((s) => (s.opcao_id === o.id ? { ...s, andar: v } : s))
+                                  );
+                                }}
+                                className="w-16 h-8 px-2 rounded border border-slate-300 text-slate-900 text-sm"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">{extrasLivreLabel} (R$)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={valorExtrasLivre}
+                      onChange={(e) => setValorExtrasLivre(e.target.value.replace(/[^0-9,.]/g, ''))}
+                      placeholder="0,00"
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm"
+                    />
+                  </div>
+                </div>
+              )}
               <Input
                 label="Observações"
                 value={observacoes}
@@ -807,6 +921,12 @@ export function CaixaPage() {
                 <div className="flex justify-between text-slate-600 text-sm">
                   <span>Frete</span>
                   <span className="tabular-nums">R$ {valorFrete.toFixed(2)}</span>
+                </div>
+              )}
+              {(tipo_entrega === 'entrega' && (valorExtras > 0 || valorExtrasLivreNum > 0)) && (
+                <div className="flex justify-between text-slate-600 text-sm">
+                  <span>Extras entrega</span>
+                  <span className="tabular-nums">R$ {(valorExtras + valorExtrasLivreNum).toFixed(2)}</span>
                 </div>
               )}
               <div className="space-y-1">

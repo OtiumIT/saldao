@@ -23,6 +23,7 @@ import { categoriasProdutoRoutes } from './modules/categorias-produto/categorias
 import { funcionariosRoutes } from './modules/funcionarios/funcionarios.routes.js';
 import { coresRoutes } from './modules/cores/cores.routes.js';
 import { parcelamentoRoutes } from './modules/parcelamento/parcelamento.routes.js';
+import { opcoesEntregaRoutes } from './modules/opcoes-entrega/opcoes-entrega.routes.js';
 
 type WorkerContext = {
   Bindings: Env;
@@ -100,6 +101,7 @@ app.route('/api/custos-operacionais', custosOperacionaisRoutes);
 app.route('/api/funcionarios', funcionariosRoutes);
 app.route('/api/cores', coresRoutes);
 app.route('/api/parcelamento', parcelamentoRoutes);
+app.route('/api/opcoes-entrega', opcoesEntregaRoutes);
 
 app.get('/', (c) => {
   return c.json({

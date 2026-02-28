@@ -10,6 +10,7 @@ import { Modal } from '../../../components/ui/Modal';
 import { DataTable } from '../../../components/ui/DataTable';
 import * as estoqueService from '../services/estoque.service';
 import type { FiltrosProduto } from '../services/estoque.service';
+import { formatNomeFornecedor } from '../../../shared/lib/format-nome';
 import { exportProdutosToXlsx, parseXlsxToProdutos } from '../lib/xlsx-produtos';
 import type { ProdutoComSaldo, CreateProdutoRequest, TipoProduto, SaldoPorCor } from '../types/estoque.types';
 
@@ -199,7 +200,7 @@ export function ProductsListPage({ tipoFromRoute }: ProductsListPageProps = {}) 
             >
               <option value="all">Todos</option>
               {fornecedores.map((f) => (
-                <option key={f.id} value={f.id}>{f.nome}</option>
+                <option key={f.id} value={f.id}>{formatNomeFornecedor(f.nome) || f.nome}</option>
               ))}
             </select>
           </div>

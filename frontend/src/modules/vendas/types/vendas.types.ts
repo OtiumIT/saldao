@@ -31,6 +31,10 @@ export interface PedidoVenda {
   distancia_km: number | null;
   /** Valor do frete (total = itens + valor_frete [+ taxa parcelamento]) */
   valor_frete: number | null;
+  /** Soma dos extras de entrega (portaria, elevador, escadas, etc.) */
+  valor_extras_entrega?: number | null;
+  /** Valor em R$ do campo "Outros extras" */
+  valor_extras_livre?: number | null;
   /** Número de parcelas no cartão (null = à vista). Total já inclui taxa quando > 1. */
   parcelas: number | null;
   /** Taxa % aplicada no parcelamento (armazenada no momento da venda). */
@@ -49,6 +53,11 @@ export interface PedidoVendaComItens extends PedidoVendaComCliente {
   itens: ItemPedidoVendaComProduto[];
 }
 
+export interface OpcaoEntregaSelecionada {
+  opcao_id: string;
+  andar?: number;
+}
+
 export interface CreatePedidoVendaRequest {
   cliente_id?: string | null;
   data_pedido?: string;
@@ -61,6 +70,10 @@ export interface CreatePedidoVendaRequest {
   distancia_km?: number | null;
   /** Valor do frete. Calculado pela faixa até 13 km; acima de 13 km informar manualmente. */
   valor_frete?: number | null;
+  /** Opções de entrega selecionadas (portaria, elevador, escadas por andar, etc.) */
+  opcoes_entrega_selecionadas?: OpcaoEntregaSelecionada[];
+  /** Valor em R$ digitado no campo "Outros extras" */
+  valor_extras_livre?: number | null;
   /** Número de parcelas no cartão (1 = à vista no cartão sem taxa; 2+ = parcelado com taxa). Null = à vista (outro meio). */
   parcelas?: number | null;
   /** Taxa % de parcelamento (aplicada sobre subtotal + frete). O total enviado deve já incluir a taxa. */

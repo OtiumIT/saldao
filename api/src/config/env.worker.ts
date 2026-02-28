@@ -32,6 +32,8 @@ export interface EnvConfig {
     corsOrigin: string;
     frontendUrl: string;
   };
+  /** Plano da conta: standard | pro. Usado para limites de usuários e clientes. */
+  planId: 'standard' | 'pro';
 }
 
 function getRequiredEnv(env: Env, key: keyof Env): string {
@@ -91,6 +93,10 @@ export function getEnv(env: Env): EnvConfig {
         corsOrigin: getOptionalEnv(env, 'CORS_ORIGIN', 'https://your-frontend-domain.pages.dev'),
         frontendUrl: getOptionalEnv(env, 'FRONTEND_URL', 'https://your-frontend-domain.pages.dev'),
       },
+      planId: (() => {
+        const v = (env.PLANO ?? '').toLowerCase().trim();
+        return v === 'standard' ? 'standard' : 'pro';
+      })(),
     };
   } catch (error) {
     if (error instanceof Error) {
