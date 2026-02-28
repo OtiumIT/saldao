@@ -95,7 +95,9 @@ export const clientesRoutes = new Hono<Ctx>()
       const created = await clientesService.create(c.env, parsed.data);
       return c.json(created, 201);
     } catch (e) {
-      return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar cliente' }, 500);
+      const msg = e instanceof Error ? e.message : 'Erro ao criar cliente';
+      const isDuplicate = /já existe|duplicad/i.test(msg);
+      return c.json({ error: msg }, isDuplicate ? 400 : 500);
     }
   })
   .patch('/:id', async (c) => {
@@ -112,7 +114,9 @@ export const clientesRoutes = new Hono<Ctx>()
       if (!updated) return c.json({ error: 'Cliente não encontrado' }, 404);
       return c.json(updated);
     } catch (e) {
-      return c.json({ error: e instanceof Error ? e.message : 'Erro ao atualizar cliente' }, 500);
+      const msg = e instanceof Error ? e.message : 'Erro ao atualizar cliente';
+      const isDuplicate = /já existe|duplicad/i.test(msg);
+      return c.json({ error: msg }, isDuplicate ? 400 : 500);
     }
   })
   .delete('/:id', async (c) => {

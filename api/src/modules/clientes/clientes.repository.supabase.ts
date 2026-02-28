@@ -37,6 +37,18 @@ export async function findByCnpj(env: Env, cnpjNormalized: string): Promise<Clie
   return results[0] ?? null;
 }
 
+export async function findByEmail(env: Env, emailNormalized: string): Promise<Cliente | null> {
+  const client = getDataClient(env);
+  const all = await db.select<Cliente>(client, 'clientes', {});
+  return all.find((c) => c.email && c.email.trim().toLowerCase() === emailNormalized) ?? null;
+}
+
+export async function findByFoneNormalized(env: Env, foneDigits: string): Promise<Cliente | null> {
+  if (foneDigits.length < 10) return null;
+  const all = await list(env);
+  return all.find((c) => c.fone && normalizeDigits(c.fone) === foneDigits) ?? null;
+}
+
 /** Busca por nome ou qualquer texto (ILIKE). Limite 20. */
 export async function searchByQuery(env: Env, q: string): Promise<Cliente[]> {
   const trimmed = (q ?? '').trim();
@@ -113,6 +125,16 @@ export async function create(
     const existing = await findByCnpj(env, cnpjNorm);
     if (existing) throw new Error('Já existe um cliente com este CNPJ.');
   }
+  const emailNorm = data.email != null && data.email.trim() !== '' ? data.email.trim().toLowerCase() : null;
+  if (emailNorm) {
+    const existing = await findByEmail(env, emailNorm);
+    if (existing) throw new Error('Já existe um cliente com este e-mail.');
+  }
+  const foneDigits = data.fone != null && data.fone.trim() !== '' ? normalizeDigits(data.fone) : null;
+  if (foneDigits && foneDigits.length >= 10) {
+    const existing = await findByFoneNormalized(env, foneDigits);
+    if (existing) throw new Error('Já existe um cliente com este telefone/WhatsApp.');
+  }
 
   const results = await db.insert<Cliente>(client, 'clientes', {
     nome: data.nome,
@@ -167,6 +189,17 @@ export async function update(
       const existing = await findByCnpj(env, cnpjNorm);
       if (existing && existing.id !== id) throw new Error('Já existe um cliente com este CNPJ.');
     }
+  }
+  const emailNorm = (data.email ?? current.email) != null && String(data.email ?? current.email).trim() !== '' ? String(data.email ?? current.email).trim().toLowerCase() : null;
+  if (emailNorm) {
+    const existing = await findByEmail(env, emailNorm);
+    if (existing && existing.id !== id) throw new Error('Já existe um cliente com este e-mail.');
+  }
+  const foneVal = data.fone !== undefined ? data.fone : current.fone;
+  const foneDigits = foneVal != null && String(foneVal).trim() !== '' ? normalizeDigits(foneVal) : null;
+  if (foneDigits && foneDigits.length >= 10) {
+    const existing = await findByFoneNormalized(env, foneDigits);
+    if (existing && existing.id !== id) throw new Error('Já existe um cliente com este telefone/WhatsApp.');
   }
 
   const updateData: Partial<Cliente> = {};

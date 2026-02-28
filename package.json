@@ -6,6 +6,8 @@
   "scripts": {
     "setup": "node setup-local.js",
     "deploy:site": "cd api && npx wrangler pages deploy ../site --project-name=saldao",
-    "deploy:api": "cd api && npm install && npx wrangler deploy"
+    "deploy:frontend": "cd frontend && npm run build && cd ../api && npx wrangler pages deploy ../frontend/dist --project-name=gestao",
+    "deploy:api": "cd api && npm install && npx wrangler deploy",
+    "deploy": "npm run deploy:frontend && npm run deploy:api"
   }
 }
