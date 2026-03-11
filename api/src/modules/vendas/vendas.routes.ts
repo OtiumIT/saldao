@@ -5,6 +5,7 @@ import { requireAuth } from '../../lib/auth-helper.worker.js';
 import { getEnv } from '../../config/env.worker.js';
 import { extractSaleOrderFromImage } from '../../lib/openai-helper.js';
 import { vendasService } from './vendas.service.js';
+import { runGeocodeJob } from '../geocode/geocode-job.js';
 
 type Ctx = { Bindings: Env };
 
@@ -96,15 +97,21 @@ export const vendasRoutes = new Hono<Ctx>()
     const data_inicio = c.req.query('data_inicio');
     const data_fim = c.req.query('data_fim');
     const cliente_nome = c.req.query('cliente_nome');
+    const cliente_ids = c.req.query('cliente_ids');
     const fornecedor_id = c.req.query('fornecedor_id');
     const produto_id = c.req.query('produto_id');
     const incluir_cancelados = c.req.query('incluir_cancelados') === '1' || c.req.query('incluir_cancelados') === 'true';
+    const clienteIdsArr =
+      cliente_ids && typeof cliente_ids === 'string'
+        ? cliente_ids.split(',').map((id) => id.trim()).filter((id) => /^[0-9a-f-]{36}$/i.test(id))
+        : undefined;
     try {
       const list = await vendasService.list(c.env, {
         status,
         data_inicio: data_inicio || undefined,
         data_fim: data_fim || undefined,
         cliente_nome: cliente_nome || undefined,
+        cliente_ids: clienteIdsArr?.length ? clienteIdsArr : undefined,
         fornecedor_id: fornecedor_id || undefined,
         produto_id: produto_id || undefined,
         incluir_cancelados,
@@ -184,6 +191,9 @@ export const vendasRoutes = new Hono<Ctx>()
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     try {
       const created = await vendasService.create(c.env, parsed.data);
+      if (parsed.data.tipo_entrega === 'entrega' && parsed.data.endereco_entrega?.trim()) {
+        (c.executionCtx as { waitUntil?: (p: Promise<unknown>) => void } | undefined)?.waitUntil?.(runGeocodeJob(c.env));
+      }
       return c.json(created, 201);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao criar';
@@ -201,6 +211,9 @@ export const vendasRoutes = new Hono<Ctx>()
     try {
       const updated = await vendasService.update(c.env, id, parsed.data);
       if (!updated) return c.json({ error: 'Pedido não encontrado ou não é rascunho' }, 404);
+      if (updated.tipo_entrega === 'entrega' && updated.endereco_entrega?.trim()) {
+        (c.executionCtx as { waitUntil?: (p: Promise<unknown>) => void } | undefined)?.waitUntil?.(runGeocodeJob(c.env));
+      }
       return c.json(updated);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao atualizar';

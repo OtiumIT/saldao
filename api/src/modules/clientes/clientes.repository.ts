@@ -17,6 +17,13 @@ export interface Cliente {
   updated_at: string;
 }
 
+/** Cliente com estatísticas de vendas (compras do cliente na loja) */
+export interface ClienteCompleto extends Cliente {
+  data_ultima_compra: string | null;
+  total_compras: number;
+  total_gasto: number;
+}
+
 /** Retorna só dígitos do input (para CPF/CNPJ/WhatsApp) */
 export function normalizeDigits(value: string | null | undefined): string {
   if (value == null || typeof value !== 'string') return '';
@@ -42,6 +49,28 @@ export async function list(): Promise<Cliente[]> {
     'SELECT id, nome, cpf, cnpj, fone, email, cep, endereco_entrega, tipo, observacoes, created_at, updated_at FROM clientes ORDER BY created_at DESC'
   );
   return rows;
+}
+
+/** Lista clientes com estatísticas de vendas (data última compra, total compras, total gasto). Mais lento. */
+export async function listCompleto(): Promise<ClienteCompleto[]> {
+  const pool = getPool();
+  if (!pool) return [];
+  const { rows } = await pool.query<ClienteCompleto & { data_ultima_compra: string | null; total_compras: string; total_gasto: string }>(
+    `SELECT c.id, c.nome, c.cpf, c.cnpj, c.fone, c.email, c.cep, c.endereco_entrega, c.tipo, c.observacoes, c.created_at, c.updated_at,
+       MAX(p.data_pedido)::text AS data_ultima_compra,
+       COUNT(p.id)::text AS total_compras,
+       COALESCE(SUM(p.total), 0)::text AS total_gasto
+     FROM clientes c
+     LEFT JOIN pedidos_venda p ON p.cliente_id = c.id AND p.status != 'cancelado'
+     GROUP BY c.id
+     ORDER BY c.created_at DESC`
+  );
+  return rows.map((r) => ({
+    ...r,
+    data_ultima_compra: r.data_ultima_compra,
+    total_compras: parseInt(r.total_compras, 10),
+    total_gasto: parseFloat(r.total_gasto),
+  }));
 }
 
 export async function findByCpf(cpfNormalized: string): Promise<Cliente | null> {

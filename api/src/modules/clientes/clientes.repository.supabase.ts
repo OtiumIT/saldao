@@ -4,13 +4,47 @@
  */
 import type { Env } from '../../types/worker-env.js';
 import { getDataClient, db } from '../../db/data-api.js';
-import type { Cliente, TipoCliente } from './clientes.repository.js';
+import type { Cliente, ClienteCompleto, TipoCliente } from './clientes.repository.js';
 import { normalizeCpf, normalizeCnpj, normalizeDigits } from './clientes.repository.js';
 
 export async function list(env: Env): Promise<Cliente[]> {
   const client = getDataClient(env);
   return db.select<Cliente>(client, 'clientes', {
     orderBy: { column: 'created_at', ascending: false },
+  });
+}
+
+/** Lista clientes com estatísticas de vendas. Mais lento (duas queries + agregação em memória). */
+export async function listCompleto(env: Env): Promise<ClienteCompleto[]> {
+  const client = getDataClient(env);
+  const [clientes, { data: pedidosData }] = await Promise.all([
+    db.select<Cliente>(client, 'clientes', { orderBy: { column: 'created_at', ascending: false } }),
+    client.from('pedidos_venda').select('cliente_id, data_pedido, total, status').neq('status', 'cancelado'),
+  ]);
+
+  type PedidoRow = { cliente_id: string; data_pedido: string; total: number; status: string };
+  const vendas: PedidoRow[] = pedidosData ?? [];
+
+  const stats = new Map<string, { dataMax: string; count: number; total: number }>();
+  for (const p of vendas) {
+    if (!p.cliente_id) continue;
+    const cur = stats.get(p.cliente_id) ?? { dataMax: '', count: 0, total: 0 };
+    cur.count += 1;
+    cur.total += Number(p.total ?? 0);
+    if (p.data_pedido && (!cur.dataMax || p.data_pedido > cur.dataMax)) {
+      cur.dataMax = p.data_pedido;
+    }
+    stats.set(p.cliente_id, cur);
+  }
+
+  return clientes.map((c) => {
+    const s = stats.get(c.id);
+    return {
+      ...c,
+      data_ultima_compra: s?.dataMax ?? null,
+      total_compras: s?.count ?? 0,
+      total_gasto: s?.total ?? 0,
+    };
   });
 }
 

@@ -1,6 +1,7 @@
 import { FormEvent, useState, useEffect } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { formatDateBR } from '../../../shared/lib/format-date';
 import type { Cliente, CreateClienteRequest, TipoCliente } from '../types/clients.types';
 
 /** Apenas dígitos */
@@ -112,6 +113,11 @@ export function ClientForm({ cliente, onSubmit, onCancel, loading = false }: Cli
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">{error}</div>
+      )}
+      {cliente?.created_at && (
+        <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+          <span className="font-medium text-gray-700">Data de cadastro:</span> {formatDateBR(cliente.created_at)}
+        </div>
       )}
       <Input label="Nome *" value={nome} onChange={(e) => setNome(e.target.value)} required disabled={isLoading} />
       <div>

@@ -23,6 +23,10 @@ export interface PedidoVenda {
   tipo_entrega: TipoEntrega;
   status: StatusPedidoVenda;
   endereco_entrega: string | null;
+  /** Latitude do endereço de entrega (geocode). */
+  endereco_lat?: number | null;
+  /** Longitude do endereço de entrega (geocode). */
+  endereco_lon?: number | null;
   observacoes: string | null;
   total: number;
   /** Promessa de entrega em X dias quando há item sem estoque */

@@ -59,7 +59,6 @@ export interface ImportExcelRow {
   descricao: string;
   quantidade: number;
   valor_unitario: number;
-  preco_revenda?: number;
 }
 
 export interface ImportFromExcelResult {

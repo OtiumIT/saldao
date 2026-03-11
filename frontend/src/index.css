@@ -63,3 +63,13 @@ button, a, [role="button"] {
     opacity: 1;
   }
 }
+
+/* Mapa de entregas: ícones customizados (evita CDN do Leaflet) */
+.mapa-entregas-marker.leaflet-marker-icon {
+  background: transparent !important;
+  border: none !important;
+}
+.mapa-entregas-marker-loja.leaflet-marker-icon {
+  background: transparent !important;
+  border: none !important;
+}

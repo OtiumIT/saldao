@@ -9,7 +9,6 @@ export interface ImportExcelRow {
   descricao: string;
   quantidade: number;
   valor_unitario: number;
-  preco_revenda?: number;
 }
 
 export const comprasService = {
@@ -79,7 +78,6 @@ export const comprasService = {
       if (!desc || qtd <= 0) continue;
 
       const valorUnit = Number(row.valor_unitario) || 0;
-      const precoRevenda = row.preco_revenda != null ? Number(row.preco_revenda) : undefined;
       let produtoId: string | null = null;
 
       const codigo = row.codigo?.trim();
@@ -99,13 +97,14 @@ export const comprasService = {
         const codigoNovo = codigo || `IMP-${Date.now()}-${i}`;
         const existente = await produtosService.findByCodigo(env, codigoNovo);
         const codigoFinal = existente ? `IMP-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}` : codigoNovo;
+        const precoVenda = valorUnit * 1.5;
         const criado = await produtosService.create(env, {
           codigo: codigoFinal,
           descricao: desc,
           unidade: 'UN',
           tipo: 'revenda',
           preco_compra: valorUnit,
-          preco_venda: precoRevenda ?? valorUnit * 1.5,
+          preco_venda: precoVenda,
           estoque_minimo: 0,
           estoque_maximo: null,
           fornecedor_principal_id: data.fornecedor_id,

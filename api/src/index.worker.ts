@@ -24,6 +24,9 @@ import { funcionariosRoutes } from './modules/funcionarios/funcionarios.routes.j
 import { coresRoutes } from './modules/cores/cores.routes.js';
 import { parcelamentoRoutes } from './modules/parcelamento/parcelamento.routes.js';
 import { opcoesEntregaRoutes } from './modules/opcoes-entrega/opcoes-entrega.routes.js';
+import { geocodeRoutes } from './modules/geocode/geocode.routes.js';
+import { configRoutes } from './routes/config.routes.js';
+import { runGeocodeJob } from './modules/geocode/geocode-job.js';
 
 type WorkerContext = {
   Bindings: Env;
@@ -85,6 +88,7 @@ app.use('*', async (c, next) => {
 
 app.route('/health', healthRoutes);
 app.route('/api/auth', authRoutes);
+app.route('/api/config', configRoutes);
 app.route('/api/users', usersRoutes);
 app.route('/api/clientes', clientesRoutes);
 app.route('/api/fornecedores', fornecedoresRoutes);
@@ -102,6 +106,7 @@ app.route('/api/funcionarios', funcionariosRoutes);
 app.route('/api/cores', coresRoutes);
 app.route('/api/parcelamento', parcelamentoRoutes);
 app.route('/api/opcoes-entrega', opcoesEntregaRoutes);
+app.route('/api/geocode', geocodeRoutes);
 
 app.get('/', (c) => {
   return c.json({
@@ -307,6 +312,15 @@ export default {
         error: message,
         ...(details && { details }),
       }, 500, origin);
+    }
+  },
+
+  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    try {
+      const result = await runGeocodeJob(env);
+      console.log('[cron] geocode job:', result);
+    } catch (err) {
+      console.error('[cron] geocode job error:', err);
     }
   },
 };

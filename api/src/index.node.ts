@@ -52,6 +52,7 @@ import { funcionariosRoutes } from './modules/funcionarios/funcionarios.routes.j
 import { coresRoutes } from './modules/cores/cores.routes.js';
 import { parcelamentoRoutes } from './modules/parcelamento/parcelamento.routes.js';
 import { opcoesEntregaRoutes } from './modules/opcoes-entrega/opcoes-entrega.routes.js';
+import { geocodeRoutes } from './modules/geocode/geocode.routes.js';
 
 const app = new Hono();
 
@@ -116,6 +117,7 @@ app.route('/api/funcionarios', funcionariosRoutes);
 app.route('/api/cores', coresRoutes);
 app.route('/api/parcelamento', parcelamentoRoutes);
 app.route('/api/opcoes-entrega', opcoesEntregaRoutes);
+app.route('/api/geocode', geocodeRoutes);
 
 app.get('/', (c) => {
   return c.json({

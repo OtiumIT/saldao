@@ -25,7 +25,7 @@ interface RegistroVendaModalProps {
 
 export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProps) {
   const { token } = useAuth();
-  const { produtos: produtosRaw } = useProdutos(true);
+  const { produtos: produtosRaw, loading: loadingProdutos, error: errorProdutos, fetchProdutos } = useProdutos(true);
   const produtosAll = Array.isArray(produtosRaw) ? produtosRaw : [];
   const produtos = produtosAll.filter((p) => p.tipo === 'revenda' || p.tipo === 'fabricado');
 
@@ -301,6 +301,14 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
     <form onSubmit={handleSubmit} className="space-y-4">
       <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileSelect} />
       {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">{error}</div>}
+      {errorProdutos && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded flex items-center justify-between gap-2">
+          <span>Erro ao carregar produtos: {errorProdutos.message}</span>
+          <Button type="button" variant="secondary" size="sm" onClick={() => fetchProdutos()}>
+            Tentar novamente
+          </Button>
+        </div>
+      )}
 
       {/* Itens primeiro (P3: ordem dos campos) */}
       <div>
@@ -322,7 +330,10 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
               <div key={i} className="grid grid-cols-12 gap-2 items-end border-b pb-2 border-gray-100">
                 <div className="col-span-5">
                   <Select
-                    options={[{ value: '', label: '— Produto —' }, ...produtoOptions]}
+                    options={[
+                      { value: '', label: loadingProdutos ? 'Carregando...' : '— Produto —' },
+                      ...produtoOptions,
+                    ]}
                     value={produtoOptions.some((o) => o.value === row.produto_id) ? row.produto_id : ''}
                     onChange={async (e) => {
                       const prodId = e.target.value;

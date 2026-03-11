@@ -48,8 +48,9 @@ export const clientesRoutes = new Hono<Ctx>()
         }
       }
     }
+    const completo = c.req.query('completo') === 'true';
     try {
-      const list = await clientesService.list(c.env);
+      const list = completo ? await clientesService.listCompleto(c.env) : await clientesService.list(c.env);
       return c.json(list);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao listar clientes' }, 500);

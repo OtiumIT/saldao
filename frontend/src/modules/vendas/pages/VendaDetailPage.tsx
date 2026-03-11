@@ -75,7 +75,39 @@ export function VendaDetailPage() {
             <div><dt className="text-gray-500">Cliente</dt><dd className="font-medium text-gray-900">{pedido.cliente_nome ?? '—'}</dd></div>
             <div><dt className="text-gray-500">Entrega</dt><dd className="font-medium text-gray-900">{pedido.tipo_entrega === 'entrega' ? 'Sim' : 'Retirada'}</dd></div>
             {pedido.endereco_entrega && (
-              <div className="sm:col-span-2"><dt className="text-gray-500">Endereço</dt><dd className="font-medium text-gray-900">{pedido.endereco_entrega}</dd></div>
+              <div className="sm:col-span-2">
+                <dt className="text-gray-500">Endereço</dt>
+                <dd className="font-medium text-gray-900 flex flex-wrap items-center gap-2">
+                  <span>{pedido.endereco_entrega}</span>
+                  <span className="inline-flex items-center gap-3">
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pedido.endereco_entrega)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-amber-600 hover:text-amber-700 font-medium"
+                      aria-label="Abrir rota no Google Maps"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Google Maps
+                    </a>
+                    <a
+                      href={`https://waze.com/ul?q=${encodeURIComponent(pedido.endereco_entrega)}&navigate=yes`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      aria-label="Abrir rota no Waze"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                      </svg>
+                      Waze
+                    </a>
+                  </span>
+                </dd>
+              </div>
             )}
             {pedido.distancia_km != null && pedido.distancia_km > 0 && (
               <div><dt className="text-gray-500">Distância</dt><dd className="font-medium text-gray-900">{Number(pedido.distancia_km)} km</dd></div>

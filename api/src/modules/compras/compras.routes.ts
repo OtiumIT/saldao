@@ -46,7 +46,6 @@ const importExcelRowSchema = z.object({
   descricao: z.string().min(1),
   quantidade: z.number().min(0.001),
   valor_unitario: z.number().min(0),
-  preco_revenda: z.number().min(0).optional(),
 });
 const importFromExcelSchema = z.object({
   fornecedor_id: z.string().uuid(),

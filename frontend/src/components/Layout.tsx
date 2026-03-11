@@ -47,44 +47,30 @@ export function Layout({ children }: LayoutProps) {
 
   const hasAdminAccess = user?.is_super_admin || user?.can_create_users;
 
-  // Menu: Cadastros no topo; depois trilhas de uso (estoque, produção, vendas, etc.)
+  // Menu: páginas mais acessadas no dia a dia no topo
   const navigation: NavItem[] = [
     { name: 'Início', path: '/' },
+    { name: 'Caixa', path: '/vendas/caixa' },
+    { name: 'Vendas', path: '/vendas' },
+    { name: 'Clientes', path: '/clientes' },
+    { name: 'Entregas', path: '/roteirizacao/entregas' },
+    { name: 'Produtos', path: '/produtos' },
 
-    {
-      name: 'Cadastros',
-      defaultCollapsed: true,
-      children: [
-        { name: 'Clientes', path: '/clientes' },
-        { name: 'Fornecedores', path: '/fornecedores' },
-        { name: 'Funcionários', path: '/funcionarios' },
-        { name: 'Produtos', path: '/produtos' },
-        { name: 'Categorias de produto', path: '/categorias-produto' },
-        { name: 'Cores (chapas)', path: '/cores' },
-        { name: 'Opções de parcelamento', path: '/parcelamento' },
-        { name: 'Preços extras da entrega', path: '/opcoes-entrega' },
-        { name: 'BOM (receita)', path: '/producao/bom' },
-        ...(hasAdminAccess ? [{ name: 'Usuários', path: '/users' }] : []),
-      ],
-    },
-
-    { name: 'Estoque e Compras', isSection: true },
+    { name: 'Compras e Estoque', isSection: true },
+    { name: 'Compras', path: '/compras' },
+    { name: 'Avisos de compra', path: '/avisos-compra' },
     { name: 'Estoque de Insumos', path: '/estoque/insumos' },
     { name: 'Estoque de Revenda', path: '/estoque/revenda' },
-    { name: 'Estoque de Fábricados', path: '/estoque/fabricados' },
+    { name: 'Estoque de Fabricados', path: '/estoque/fabricados' },
     { name: 'Movimentações', path: '/estoque/movimentacoes' },
     { name: 'Conferência de estoque', path: '/estoque/conferencia' },
-    { name: 'Avisos de compra', path: '/avisos-compra' },
-    { name: 'Compras', path: '/compras' },
 
     { name: 'Produção', isSection: true },
     { name: 'BOM (receita)', path: '/producao/bom' },
     { name: 'Ordens de produção', path: '/producao/ordens' },
 
-    { name: 'Vendas e Entregas', isSection: true },
-    { name: 'Vendas', path: '/vendas' },
+    { name: 'Vendas e Relatórios', isSection: true },
     { name: 'Relatório de vendas', path: '/vendas/relatorio' },
-    { name: 'Entregas', path: '/roteirizacao/entregas' },
     { name: 'Veículos', path: '/roteirizacao/veiculos' },
 
     { name: 'Financeiro', isSection: true },
@@ -92,7 +78,20 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Contas a receber', path: '/financeiro/contas-receber' },
     { name: 'Resumo financeiro', path: '/financeiro/resumo' },
 
-    { name: 'Custos e Folha', isSection: true },
+    { name: 'Cadastros e Config', isSection: true },
+    {
+      name: 'Cadastros',
+      defaultCollapsed: true,
+      children: [
+        { name: 'Fornecedores', path: '/fornecedores' },
+        { name: 'Funcionários', path: '/funcionarios' },
+        { name: 'Categorias de produto', path: '/categorias-produto' },
+        { name: 'Cores (chapas)', path: '/cores' },
+        { name: 'Parcelamento', path: '/parcelamento' },
+        { name: 'Extras de entrega', path: '/opcoes-entrega' },
+        ...(hasAdminAccess ? [{ name: 'Usuários', path: '/users' }] : []),
+      ],
+    },
     { name: 'Categorias de custo', path: '/custos-operacionais/categorias' },
     { name: 'Custos do mês', path: '/custos-operacionais/mes' },
     { name: 'Folha de pagamento', path: '/funcionarios/folha' },

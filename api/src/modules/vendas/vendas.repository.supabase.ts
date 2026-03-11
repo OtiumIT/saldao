@@ -27,6 +27,7 @@ export async function list(
     data_inicio?: string;
     data_fim?: string;
     cliente_nome?: string | null;
+    cliente_ids?: string[];
     fornecedor_id?: string | null;
     produto_id?: string | null;
     incluir_cancelados?: boolean;
@@ -80,20 +81,29 @@ export async function list(
 
   const clienteIds = [...new Set(pedidos.map((p) => p.cliente_id).filter((id): id is string => id !== null))];
   const clientes = clienteIds.length > 0
-    ? await db.select<{ id: string; nome: string }>(client, 'clientes', {
+    ? await db.select<{ id: string; nome: string; fone: string | null }>(client, 'clientes', {
         filters: { id: clienteIds },
       })
     : [];
   const clientesMap = new Map(clientes.map((c) => [c.id, c]));
 
-  let result = pedidos.map((p) => ({
-    ...p,
-    cliente_nome: p.cliente_id ? clientesMap.get(p.cliente_id)?.nome ?? null : null,
-  }));
+  let result = pedidos.map((p) => {
+    const cliente = p.cliente_id ? clientesMap.get(p.cliente_id) : undefined;
+    return {
+      ...p,
+      cliente_nome: cliente?.nome ?? null,
+      cliente_fone: cliente?.fone ?? null,
+    };
+  });
 
   if (filtros?.cliente_nome && filtros.cliente_nome.trim()) {
     const q = filtros.cliente_nome.trim().toLowerCase();
     result = result.filter((p) => (p.cliente_nome ?? '').toLowerCase().includes(q));
+  }
+
+  if (filtros?.cliente_ids && filtros.cliente_ids.length > 0) {
+    const idsSet = new Set(filtros.cliente_ids);
+    result = result.filter((p) => p.cliente_id && idsSet.has(p.cliente_id));
   }
 
   return result;

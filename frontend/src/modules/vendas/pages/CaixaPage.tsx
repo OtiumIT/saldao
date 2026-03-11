@@ -43,7 +43,7 @@ function calcularFretePorKm(km: number): number | null {
 export function CaixaPage() {
   const navigate = useNavigate();
   const { token } = useAuth();
-  const { produtos: produtosRaw } = useProdutos(true);
+  const { produtos: produtosRaw, loading: loadingProdutos, error: errorProdutos, fetchProdutos } = useProdutos(true);
   const produtosAll = Array.isArray(produtosRaw) ? produtosRaw : [];
   const produtos = useMemo(
     () => produtosAll.filter((p) => p.tipo === 'revenda' || p.tipo === 'fabricado'),
@@ -562,6 +562,14 @@ export function CaixaPage() {
         {/* Coluna esquerda: Produtos (mais estreita) */}
         <section className="flex-1 flex flex-col min-w-0 max-w-xl min-h-0 p-4 lg:p-6 bg-slate-50 lg:border-r border-slate-200">
           <h2 className="text-slate-900 font-semibold mb-3">Produtos</h2>
+          {errorProdutos && (
+            <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center justify-between gap-2 flex-wrap">
+              <span>Erro ao carregar produtos: {errorProdutos.message}</span>
+              <Button type="button" variant="secondary" size="sm" onClick={() => fetchProdutos()}>
+                Tentar novamente
+              </Button>
+            </div>
+          )}
           <div className="space-y-3 shrink-0">
             <label className="block text-sm font-medium text-slate-700">Buscar produto (código ou nome)</label>
             <div>
@@ -572,7 +580,7 @@ export function CaixaPage() {
                 options={produtoOptions}
                 filterOption={comboboxFilterOption}
                 maxOptions={14}
-                placeholder="Digite para buscar · ↑↓ navegar · Enter selecionar"
+                placeholder={loadingProdutos ? 'Carregando produtos...' : 'Digite para buscar · ↑↓ navegar · Enter selecionar'}
                 aria-label="Buscar produto por código ou descrição"
                 inputClassName="w-full h-14 px-5 text-lg bg-white border border-slate-300 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
               />

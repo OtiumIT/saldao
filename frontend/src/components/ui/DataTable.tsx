@@ -7,6 +7,8 @@ export interface Column<T> {
   label: string;
   sortable?: boolean;
   filterable?: boolean;
+  /** Tipo do filtro: 'text' (padrão) ou 'date' (date picker) */
+  filterType?: 'text' | 'date';
   render?: (item: T) => ReactNode;
   sortValue?: (item: T) => string | number | Date;
   filterValue?: (item: T) => string;
@@ -184,25 +186,28 @@ export function DataTable<T extends Record<string, any>>({
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {columns
               .filter((col) => col.filterable)
-              .map((column) => (
-                <div key={column.key}>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    {column.label}
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={`Filtrar ${column.label.toLowerCase()}...`}
-                    value={filters[column.key] || ''}
-                    onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        [column.key]: e.target.value,
-                      }))
-                    }
-                    className="w-full min-h-[44px] px-3 py-2 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-gold focus:border-brand-gold touch-manipulation"
-                  />
-                </div>
-              ))}
+              .map((column) => {
+                const isDateFilter = column.filterType === 'date';
+                return (
+                  <div key={column.key}>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      {column.label}
+                    </label>
+                    <input
+                      type={isDateFilter ? 'date' : 'text'}
+                      placeholder={isDateFilter ? undefined : `Filtrar ${column.label.toLowerCase()}...`}
+                      value={filters[column.key] || ''}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          [column.key]: e.target.value,
+                        }))
+                      }
+                      className="w-full min-h-[44px] px-3 py-2 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-gold focus:border-brand-gold touch-manipulation"
+                    />
+                  </div>
+                );
+              })}
           </div>
 
           {/* Botão para limpar filtros */}

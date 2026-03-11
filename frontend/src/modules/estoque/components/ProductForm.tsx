@@ -193,7 +193,7 @@ export function ProductForm({ produto, fornecedores, categorias = [], initialFor
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Preço compra" type="number" step="0.01" value={preco_compra} onChange={(e) => setPrecoCompra(e.target.value)} disabled={isLoading} />
-        <Input label="Preço venda" type="number" step="0.01" value={preco_venda} onChange={(e) => setPrecoVenda(e.target.value)} disabled={isLoading} />
+        <Input label="Preço venda (site)" type="number" step="0.01" value={preco_venda} onChange={(e) => setPrecoVenda(e.target.value)} disabled={isLoading} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Estoque mínimo" type="number" step="0.001" value={estoque_minimo} onChange={(e) => setEstoqueMinimo(e.target.value)} disabled={isLoading} />

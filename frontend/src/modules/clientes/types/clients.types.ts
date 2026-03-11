@@ -15,6 +15,13 @@ export interface Cliente {
   updated_at: string;
 }
 
+/** Cliente com estatísticas de vendas (compras do cliente na loja) */
+export interface ClienteCompleto extends Cliente {
+  data_ultima_compra: string | null;
+  total_compras: number;
+  total_gasto: number;
+}
+
 export interface CreateClienteRequest {
   nome: string;
   cpf?: string | null;

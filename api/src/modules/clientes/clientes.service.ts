@@ -10,6 +10,12 @@ export const clientesService = {
     }
     return repo.list();
   },
+  listCompleto: (env: Env) => {
+    if (useSupabaseDataAPI(env)) {
+      return repoSupabase.listCompleto(env);
+    }
+    return repo.listCompleto();
+  },
   findById: (env: Env, id: string) => {
     if (useSupabaseDataAPI(env)) {
       return repoSupabase.findById(env, id);

@@ -20,6 +20,10 @@ export interface PedidoVenda {
   tipo_entrega: TipoEntrega;
   status: StatusPedidoVenda;
   endereco_entrega: string | null;
+  /** Latitude do endereço de entrega (geocode). */
+  endereco_lat: number | null;
+  /** Longitude do endereço de entrega (geocode). */
+  endereco_lon: number | null;
   observacoes: string | null;
   total: number;
   /** Promessa de entrega em X dias quando há item sem estoque */
@@ -54,14 +58,15 @@ export async function list(filtros?: {
   data_inicio?: string;
   data_fim?: string;
   cliente_nome?: string | null;
+  cliente_ids?: string[];
   fornecedor_id?: string | null;
   produto_id?: string | null;
   incluir_cancelados?: boolean;
 }): Promise<PedidoVendaComCliente[]> {
   const pool = getPool();
   if (!pool) return [];
-  let sql = `SELECT DISTINCT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.valor_extras_entrega::numeric, p.valor_extras_livre::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
-    c.nome AS cliente_nome FROM pedidos_venda p LEFT JOIN clientes c ON c.id = p.cliente_id`;
+  let sql = `SELECT DISTINCT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.endereco_lat::numeric, p.endereco_lon::numeric, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.valor_extras_entrega::numeric, p.valor_extras_livre::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
+    c.nome AS cliente_nome, c.fone AS cliente_fone FROM pedidos_venda p LEFT JOIN clientes c ON c.id = p.cliente_id`;
   const params: unknown[] = [];
   let i = 1;
 
@@ -78,6 +83,10 @@ export async function list(filtros?: {
   if (filtros?.cliente_nome && filtros.cliente_nome.trim()) {
     sql += ` AND c.nome ILIKE $${i++}`;
     params.push(`%${filtros.cliente_nome.trim()}%`);
+  }
+  if (filtros?.cliente_ids && filtros.cliente_ids.length > 0) {
+    sql += ` AND p.cliente_id = ANY($${i++}::uuid[])`;
+    params.push(filtros.cliente_ids);
   }
   if (filtros?.fornecedor_id) {
     sql += ` AND (pr.fornecedor_principal_id = $${i} OR EXISTS (SELECT 1 FROM produtos_fornecedores pf WHERE pf.produto_id = pr.id AND pf.fornecedor_id = $${i}))`;
@@ -142,7 +151,7 @@ export async function findById(id: string): Promise<PedidoVendaComCliente | null
   const pool = getPool();
   if (!pool) return null;
   const { rows } = await pool.query<PedidoVendaComCliente & { taxa_parcelamento_percentual: string | null; valor_extras_entrega: string | null }>(
-    `SELECT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.valor_extras_entrega::numeric, p.valor_extras_livre::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
+    `SELECT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.endereco_lat::numeric, p.endereco_lon::numeric, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.valor_extras_entrega::numeric, p.valor_extras_livre::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
      c.nome AS cliente_nome, c.fone AS cliente_fone, c.cep AS cliente_cep FROM pedidos_venda p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE p.id = $1`,
     [id]
   );

@@ -5,7 +5,7 @@ import type { ImportExcelRow } from '../services/compras.service';
  * Encontra a linha de cabeçalho que contém COD, QUANTIDADE, DESCRIÇÃO (ou equivalentes).
  * Retorna o índice da linha e os índices das colunas.
  */
-function findHeaderRow(sheet: XLSX.WorkSheet): { rowIndex: number; cols: { cod: number; qtd: number; desc: number; valorUnit: number; precoRevenda: number } } | null {
+function findHeaderRow(sheet: XLSX.WorkSheet): { rowIndex: number; cols: { cod: number; qtd: number; desc: number; valorUnit: number } } | null {
   const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
   for (let R = 0; R <= Math.min(range.e.r, 15); R++) {
     const row: string[] = [];
@@ -19,7 +19,6 @@ function findHeaderRow(sheet: XLSX.WorkSheet): { rowIndex: number; cols: { cod: 
     const qtdIdx = row.findIndex((c) => c.includes('quantidade') || c === 'qtd');
     const descIdx = row.findIndex((c) => c.includes('descri') || c === 'descrição' || c === 'descricao' || c === 'produto');
     const valorUnitIdx = row.findIndex((c) => c.includes('valor unit') || c.includes('valor unitário') || c === 'vl unit');
-    const precoRevendaIdx = row.findIndex((c) => c.includes('preço revenda') || c.includes('preco revenda') || c.includes('revenda'));
     if (qtdIdx >= 0 && descIdx >= 0) {
       return {
         rowIndex: R,
@@ -28,7 +27,6 @@ function findHeaderRow(sheet: XLSX.WorkSheet): { rowIndex: number; cols: { cod: 
           qtd: qtdIdx,
           desc: descIdx,
           valorUnit: valorUnitIdx >= 0 ? valorUnitIdx : 3,
-          precoRevenda: precoRevendaIdx >= 0 ? precoRevendaIdx : 5,
         },
       };
     }
@@ -59,7 +57,7 @@ export function parsePlanilhaCompras(file: File): Promise<ImportExcelRow[]> {
         }
         const header = findHeaderRow(sheet);
         if (!header) {
-          reject(new Error('Cabeçalho não encontrado. Use colunas: COD, QUANTIDADE, DESCRIÇÃO, VALOR UNIT., PREÇO REVENDA'));
+          reject(new Error('Cabeçalho não encontrado. Use colunas: COD, QUANTIDADE, DESCRIÇÃO, VALOR UNIT.'));
           return;
         }
         const range = XLSX.utils.decode_range(sheet['!ref']);
@@ -89,7 +87,6 @@ export function parsePlanilhaCompras(file: File): Promise<ImportExcelRow[]> {
           if (!descricao || quantidade <= 0) continue;
 
           const valorUnit = getNum(cols.valorUnit);
-          const precoRevenda = getNum(cols.precoRevenda);
           const codigo = cols.cod >= 0 ? get(cols.cod) : undefined;
 
           rows.push({
@@ -97,7 +94,6 @@ export function parsePlanilhaCompras(file: File): Promise<ImportExcelRow[]> {
             descricao,
             quantidade,
             valor_unitario: valorUnit >= 0 ? valorUnit : 0,
-            preco_revenda: precoRevenda > 0 ? precoRevenda : undefined,
           });
         }
 

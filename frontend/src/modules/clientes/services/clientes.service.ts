@@ -1,8 +1,13 @@
 import { apiClient } from '../../../shared/lib/api-client';
-import type { Cliente, CreateClienteRequest, UpdateClienteRequest } from '../types/clients.types';
+import type { Cliente, ClienteCompleto, CreateClienteRequest, UpdateClienteRequest } from '../types/clients.types';
 
 export async function listClientes(token: string): Promise<Cliente[]> {
   return apiClient.get<Cliente[]>('/api/clientes', token);
+}
+
+/** Lista clientes com dados completos (última compra, total compras, total gasto). Mais lento. */
+export async function listClientesCompleto(token: string): Promise<ClienteCompleto[]> {
+  return apiClient.get<ClienteCompleto[]>('/api/clientes?completo=true', token);
 }
 
 /** Busca cliente por CPF (11 dígitos), CNPJ (14) ou WhatsApp/fone. Retorna um cliente ou null. */

@@ -6,15 +6,24 @@ import { getPlanLimits } from '../lib/planos.js';
 
 type WorkerContext = { Bindings: Env };
 
-export const configRoutes = new Hono<WorkerContext>().get('/plan', async (c) => {
-  const authResult = await requireAuth(c);
-  if (authResult instanceof Response) return authResult;
+export const configRoutes = new Hono<WorkerContext>()
+  .get('/plan', async (c) => {
+    const authResult = await requireAuth(c);
+    if (authResult instanceof Response) return authResult;
 
-  const envConfig = getEnv(c.env);
-  const limits = getPlanLimits(envConfig.planId);
-  return c.json({
-    planId: envConfig.planId,
-    maxUsuarios: limits.maxUsuarios,
-    maxClientesAtivos: limits.maxClientesAtivos,
+    const envConfig = getEnv(c.env);
+    const limits = getPlanLimits(envConfig.planId);
+    return c.json({
+      planId: envConfig.planId,
+      maxUsuarios: limits.maxUsuarios,
+      maxClientesAtivos: limits.maxClientesAtivos,
+    });
+  })
+  .get('/endereco-loja', async (c) => {
+    const authResult = await requireAuth(c);
+    if (authResult instanceof Response) return authResult;
+
+    const envConfig = getEnv(c.env);
+    const endereco = envConfig.googleMaps?.enderecoOrigemLoja ?? '';
+    return c.json({ endereco: endereco.trim() || null });
   });
-});

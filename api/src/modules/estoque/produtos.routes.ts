@@ -101,9 +101,10 @@ export const produtosRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      const existing = await produtosService.findByCodigo(c.env, parsed.data.codigo);
+      const d = parsed.data;
+      const existing = await produtosService.findByCodigo(c.env, d.codigo);
       if (existing) return c.json({ error: 'Código já existe' }, 400);
-      const created = await produtosService.create(c.env, parsed.data);
+      const created = await produtosService.create(c.env, d);
       return c.json(created, 201);
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : 'Erro ao criar produto' }, 500);
@@ -134,11 +135,13 @@ export const produtosRoutes = new Hono<Ctx>()
       return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     }
     try {
-      if (parsed.data.codigo) {
-        const existing = await produtosService.findByCodigo(c.env, parsed.data.codigo);
+      const d = parsed.data;
+      const current = await produtosService.findById(c.env, id);
+      if (d.codigo) {
+        const existing = await produtosService.findByCodigo(c.env, d.codigo);
         if (existing && existing.id !== id) return c.json({ error: 'Código já existe' }, 400);
       }
-      const updated = await produtosService.update(c.env, id, parsed.data);
+      const updated = await produtosService.update(c.env, id, d);
       if (!updated) return c.json({ error: 'Produto não encontrado' }, 404);
       return c.json(updated);
     } catch (e) {

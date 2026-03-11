@@ -34,7 +34,7 @@ async function calcularSaldoPorCor(env: Env, produtoId: string, corId: string): 
   return movimentacoes.reduce((sum, m) => sum + m.quantidade, 0);
 }
 
-function mapProdutoRow(r: any): Produto {
+function mapProdutoRow(r: Record<string, unknown>): Produto {
   return {
     ...r,
     categoria_id: r.categoria_id ?? null,

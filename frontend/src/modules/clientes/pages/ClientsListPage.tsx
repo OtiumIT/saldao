@@ -5,7 +5,7 @@ import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
 import { DataTable } from '../../../components/ui/DataTable';
 import { formatDateBR } from '../../../shared/lib/format-date';
-import type { Cliente, CreateClienteRequest, UpdateClienteRequest } from '../types/clients.types';
+import type { Cliente, ClienteCompleto, CreateClienteRequest, UpdateClienteRequest } from '../types/clients.types';
 
 function formatCpfCnpj(c: Cliente): string {
   if (c.cnpj && c.cnpj.trim()) return c.cnpj;
@@ -29,8 +29,12 @@ function WhatsAppIcon({ className }: { className?: string }) {
   );
 }
 
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+
 export function ClientsListPage() {
-  const { clientes, loading, error, createCliente, updateCliente, deleteCliente } = useClients();
+  const { clientes, modoCompleto, loading, loadingCompleto, error, fetchClientes, fetchClientesCompleto, createCliente, updateCliente, deleteCliente } = useClients();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | undefined>();
   const [deletingCliente, setDeletingCliente] = useState<Cliente | null>(null);
@@ -83,11 +87,29 @@ export function ClientsListPage() {
       <div className="flex justify-between items-center flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{clientes.length} clientes</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {clientes.length} clientes
+            {modoCompleto && ' (dados completos)'}
+          </p>
         </div>
-        <Button onClick={handleCreate}>
-          Novo Cliente
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={fetchClientesCompleto}
+            disabled={loadingCompleto || modoCompleto}
+            title="Carrega dados de última compra, total de compras e total gasto (mais lento)"
+          >
+            {loadingCompleto ? 'Carregando...' : modoCompleto ? 'Dados completos' : 'Carregar dados completos'}
+          </Button>
+          {modoCompleto && (
+            <Button variant="secondary" onClick={fetchClientes} disabled={loading}>
+              Voltar ao modo rápido
+            </Button>
+          )}
+          <Button onClick={handleCreate}>
+            Novo Cliente
+          </Button>
+        </div>
       </div>
 
       {clientes.length === 0 && !loading ? (
@@ -146,16 +168,48 @@ export function ClientsListPage() {
               label: 'Data cadastro',
               sortable: true,
               filterable: true,
+              filterType: 'date',
               render: (c) => formatDateBR(c.created_at),
               sortValue: (c) => c.created_at ?? '',
               filterValue: (c) => {
                 const d = c.created_at;
                 if (!d) return '';
-                const iso = d.slice(0, 10);
-                const br = formatDateBR(d);
-                return `${iso} ${br}`.toLowerCase();
+                return d.slice(0, 10);
               },
             },
+            ...(modoCompleto
+              ? [
+                  {
+                    key: 'data_ultima_compra',
+                    label: 'Última compra',
+                    sortable: true,
+                    filterable: true,
+                    filterType: 'date' as const,
+                    render: (c: Cliente | ClienteCompleto) => formatDateBR((c as ClienteCompleto).data_ultima_compra),
+                    sortValue: (c: Cliente | ClienteCompleto) => (c as ClienteCompleto).data_ultima_compra ?? '',
+                    filterValue: (c: Cliente | ClienteCompleto) => {
+                      const d = (c as ClienteCompleto).data_ultima_compra;
+                      return d ? d.slice(0, 10) : '';
+                    },
+                  },
+                  {
+                    key: 'total_compras',
+                    label: 'Total compras',
+                    sortable: true,
+                    filterable: false,
+                    render: (c: Cliente | ClienteCompleto) => (c as ClienteCompleto).total_compras ?? 0,
+                    sortValue: (c: Cliente | ClienteCompleto) => (c as ClienteCompleto).total_compras ?? 0,
+                  },
+                  {
+                    key: 'total_gasto',
+                    label: 'Total gasto',
+                    sortable: true,
+                    filterable: false,
+                    render: (c: Cliente | ClienteCompleto) => formatCurrency((c as ClienteCompleto).total_gasto ?? 0),
+                    sortValue: (c: Cliente | ClienteCompleto) => (c as ClienteCompleto).total_gasto ?? 0,
+                  },
+                ]
+              : []),
             {
               key: 'actions',
               label: 'Ações',

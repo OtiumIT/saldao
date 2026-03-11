@@ -10,6 +10,7 @@ export interface ListPedidosVendaParams {
   data_inicio?: string;
   data_fim?: string;
   cliente_nome?: string | null;
+  cliente_ids?: string[];
   fornecedor_id?: string | null;
   produto_id?: string | null;
   incluir_cancelados?: boolean;
@@ -25,17 +26,25 @@ export async function getTotaisVendas(token: string): Promise<TotaisVendas> {
   return apiClient.get<TotaisVendas>('/api/vendas/totais', token);
 }
 
+export async function getEnderecoLoja(token: string): Promise<string | null> {
+  const res = await apiClient.get<{ endereco: string | null }>('/api/config/endereco-loja', token);
+  return res?.endereco ?? null;
+}
+
 export async function listPedidosVenda(
   token: string,
   params?: ListPedidosVendaParams
 ): Promise<PedidoVendaComCliente[]> {
   if (!params) return apiClient.get<PedidoVendaComCliente[]>('/api/vendas', token);
-  const { incluir_cancelados, ...rest } = params ?? {};
+  const { incluir_cancelados, cliente_ids, ...rest } = params ?? {};
   const entries = Object.entries(rest).filter(
     (entry): entry is [string, string] => entry[1] != null && entry[1] !== ''
   );
   if (incluir_cancelados === true) {
     entries.push(['incluir_cancelados', '1']);
+  }
+  if (cliente_ids && cliente_ids.length > 0) {
+    entries.push(['cliente_ids', cliente_ids.join(',')]);
   }
   const q = entries.length > 0 ? new URLSearchParams(entries).toString() : '';
   return apiClient.get<PedidoVendaComCliente[]>(`/api/vendas${q ? `?${q}` : ''}`, token);
