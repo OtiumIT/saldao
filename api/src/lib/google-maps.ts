@@ -19,9 +19,10 @@ export async function calcularDistanciaKm(
     throw new Error('Endereço da loja não configurado (ENDERECO_ORIGEM_LOJA).');
   }
 
+  const destFormatado = formatarEnderecoParaGeocode(enderecoDestino);
   const params = new URLSearchParams({
     origins: enderecoOrigem.trim(),
-    destinations: enderecoDestino.trim(),
+    destinations: destFormatado,
     key: apiKey.trim(),
     units: 'metric',
   });
@@ -95,7 +96,12 @@ function aplicarCorrecoesEndereco(endereco: string): string {
 }
 
 function formatarEnderecoParaGeocode(endereco: string): string {
-  const e = aplicarCorrecoesEndereco(endereco);
+  let e = aplicarCorrecoesEndereco(endereco);
+  // Evitar duplicar "Brazil"/"Brasil" no final (ex.: "..., 03910-040, Brazil")
+  const fim = e.toLowerCase().trim();
+  if (fim.endsWith(', brazil') || fim.endsWith(', brasil')) {
+    e = e.replace(/,?\s*(brazil|brasil)\s*$/i, '').trim();
+  }
   if (temCidadeEstado(e)) return `${e}, Brasil`;
   return `${e}, São Paulo, SP, Brasil`;
 }
