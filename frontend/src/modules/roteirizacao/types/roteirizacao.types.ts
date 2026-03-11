@@ -36,5 +36,7 @@ export interface Entrega {
 export interface EntregaComPedido extends Entrega {
   cliente_nome?: string | null;
   endereco_entrega?: string | null;
+  endereco_lat?: number | null;
+  endereco_lon?: number | null;
   total?: number;
 }

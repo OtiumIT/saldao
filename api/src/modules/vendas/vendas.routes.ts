@@ -5,6 +5,7 @@ import { requireAuth } from '../../lib/auth-helper.worker.js';
 import { getEnv } from '../../config/env.worker.js';
 import { extractSaleOrderFromImage } from '../../lib/openai-helper.js';
 import { vendasService } from './vendas.service.js';
+import { clientesService } from '../clientes/clientes.service.js';
 import { runGeocodeJob } from '../geocode/geocode-job.js';
 
 type Ctx = { Bindings: Env };
@@ -20,11 +21,13 @@ const opcaoEntregaSelecionadaSchema = z.object({
   andar: z.number().int().min(0).optional(),
 });
 
-const createSchema = z.object({
+const baseVendaSchema = z.object({
   cliente_id: z.string().uuid().nullable().optional(),
   data_pedido: z.string().optional(),
   tipo_entrega: z.enum(['retirada', 'entrega']),
   endereco_entrega: z.string().nullable().optional(),
+  /** CEP do cliente (obrigatório quando há endereço; atualiza cadastro) */
+  cliente_cep: z.string().max(20).nullable().optional(),
   observacoes: z.string().nullable().optional(),
   previsao_entrega_em_dias: z.number().int().positive().nullable().optional(),
   distancia_km: z.number().min(0).nullable().optional(),
@@ -36,7 +39,21 @@ const createSchema = z.object({
   itens: z.array(itemSchema).min(1, 'Pelo menos um item'),
 });
 
-const updateSchema = createSchema.partial();
+const createSchema = baseVendaSchema.refine(
+  (data) =>
+    !data.endereco_entrega?.trim() ||
+    !data.cliente_id ||
+    (data.cliente_cep && data.cliente_cep.replace(/\D/g, '').length === 8),
+  { message: 'CEP é obrigatório quando há endereço (8 dígitos)', path: ['cliente_cep'] }
+);
+
+const updateSchema = baseVendaSchema.partial().refine(
+  (data) =>
+    !data.endereco_entrega?.trim() ||
+    !data.cliente_id ||
+    (data.cliente_cep != null && data.cliente_cep.replace(/\D/g, '').length === 8),
+  { message: 'CEP é obrigatório quando há endereço (8 dígitos)', path: ['cliente_cep'] }
+);
 
 const extractFromImageSchema = z.object({ imageBase64: z.string().min(1) });
 
@@ -139,6 +156,21 @@ export const vendasRoutes = new Hono<Ctx>()
       return c.json({ error: msg }, 500);
     }
   })
+  .get('/enriquecer-endereco', async (c) => {
+    const auth = await requireAuth(c);
+    if (auth instanceof Response) return auth;
+    const endereco = c.req.query('endereco');
+    if (!endereco || typeof endereco !== 'string' || !endereco.trim()) {
+      return c.json({ error: 'endereco obrigatório' }, 400);
+    }
+    try {
+      const result = await vendasService.enriquecerEndereco(c.env, endereco.trim());
+      if (!result) return c.json({ error: 'Geocoding não configurado (GOOGLE_MAPS_API_KEY)' }, 503);
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : 'Erro ao enriquecer endereço' }, 500);
+    }
+  })
   .get('/relatorio', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;
@@ -190,9 +222,18 @@ export const vendasRoutes = new Hono<Ctx>()
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: parsed.error.flatten().fieldErrors }, 400);
     try {
-      const created = await vendasService.create(c.env, parsed.data);
+      const { cliente_cep, ...createPayload } = parsed.data;
+      const created = await vendasService.create(c.env, createPayload);
       if (parsed.data.tipo_entrega === 'entrega' && parsed.data.endereco_entrega?.trim()) {
         (c.executionCtx as { waitUntil?: (p: Promise<unknown>) => void } | undefined)?.waitUntil?.(runGeocodeJob(c.env));
+      }
+      if (parsed.data.cliente_id && (cliente_cep != null || parsed.data.endereco_entrega?.trim())) {
+        const updateData: { cep?: string | null; endereco_entrega?: string | null } = {};
+        if (cliente_cep != null) updateData.cep = String(cliente_cep).trim() || null;
+        if (parsed.data.endereco_entrega?.trim()) updateData.endereco_entrega = parsed.data.endereco_entrega.trim();
+        if (Object.keys(updateData).length > 0) {
+          await clientesService.update(c.env, parsed.data.cliente_id, updateData);
+        }
       }
       return c.json(created, 201);
     } catch (e) {

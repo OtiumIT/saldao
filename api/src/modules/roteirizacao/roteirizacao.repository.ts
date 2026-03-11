@@ -150,7 +150,7 @@ export async function listEntregas(filtros?: { veiculo_id?: string; data?: strin
   const pool = getPool();
   if (!pool) return [];
   let sql = `SELECT e.id, e.pedido_venda_id, e.veiculo_id, e.data_entrega_prevista::text, e.ordem_na_rota, e.status, e.entregue_em, e.created_at,
-    p.cliente_id, p.endereco_entrega, p.total,
+    p.cliente_id, p.endereco_entrega, p.endereco_lat::numeric, p.endereco_lon::numeric, p.total,
     c.nome AS cliente_nome
     FROM entregas e
     JOIN pedidos_venda p ON p.id = e.pedido_venda_id
@@ -162,21 +162,68 @@ export async function listEntregas(filtros?: { veiculo_id?: string; data?: strin
   if (filtros?.data) { sql += ` AND e.data_entrega_prevista = $${i++}`; params.push(filtros.data); }
   if (filtros?.status) { sql += ` AND e.status = $${i++}`; params.push(filtros.status); }
   sql += ' ORDER BY e.data_entrega_prevista NULLS LAST, e.ordem_na_rota NULLS LAST';
-  const { rows } = await pool.query<EntregaComPedido & { total: string }>(sql, params);
-  return rows.map((r) => ({ ...r, total: Number(r.total ?? 0) }));
+  const { rows } = await pool.query<EntregaComPedido & { total: string; endereco_lat?: string | null; endereco_lon?: string | null }>(sql, params);
+  return rows.map((r) => ({
+    ...r,
+    total: Number(r.total ?? 0),
+    endereco_lat: r.endereco_lat != null ? Number(r.endereco_lat) : null,
+    endereco_lon: r.endereco_lon != null ? Number(r.endereco_lon) : null,
+  }));
+}
+
+/** Pedidos para o mapa: pendentes + agendadas (pendente/em_rota), com lat/lon. */
+export async function listPedidosParaMapa(): Promise<
+  Array<{
+    id: string;
+    cliente_nome: string | null;
+    endereco_entrega: string | null;
+    endereco_lat: number | null;
+    endereco_lon: number | null;
+    data_pedido: string;
+    data_entrega_prevista: string | null;
+  }>
+> {
+  const pool = getPool();
+  if (!pool) return [];
+  const { rows } = await pool.query<
+    Array<{
+      id: string;
+      cliente_nome: string | null;
+      endereco_entrega: string | null;
+      endereco_lat: number | null;
+      endereco_lon: number | null;
+      data_pedido: string;
+      data_entrega_prevista: string | null;
+    }>
+  >(
+    `SELECT p.id, c.nome AS cliente_nome, p.endereco_entrega, p.endereco_lat::numeric, p.endereco_lon::numeric, p.data_pedido::text,
+     e.data_entrega_prevista::text
+     FROM pedidos_venda p
+     LEFT JOIN clientes c ON c.id = p.cliente_id
+     LEFT JOIN entregas e ON e.pedido_venda_id = p.id AND e.status IN ('pendente', 'em_rota')
+     WHERE p.tipo_entrega = 'entrega' AND p.status = 'confirmado'
+       AND p.endereco_entrega IS NOT NULL AND TRIM(p.endereco_entrega) != ''
+       AND (e.id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM entregas e2 WHERE e2.pedido_venda_id = p.id))
+     ORDER BY e.data_entrega_prevista NULLS LAST, p.data_pedido`
+  );
+  return rows.map((r) => ({
+    ...r,
+    endereco_lat: r.endereco_lat != null ? Number(r.endereco_lat) : null,
+    endereco_lon: r.endereco_lon != null ? Number(r.endereco_lon) : null,
+  }));
 }
 
 /** Pedidos de venda confirmados com tipo_entrega=entrega que ainda não têm entrega. */
-export async function listPedidosPendentesEntrega(): Promise<Array<{ id: string; cliente_nome: string | null; endereco_entrega: string | null; total: number }>> {
+export async function listPedidosPendentesEntrega(): Promise<Array<{ id: string; cliente_nome: string | null; endereco_entrega: string | null; zona_entrega: string | null; micro_regiao_entrega: string | null; total: number }>> {
   const pool = getPool();
   if (!pool) return [];
-  const { rows } = await pool.query<{ id: string; cliente_nome: string | null; endereco_entrega: string | null; total: string }>(
-    `SELECT p.id, c.nome AS cliente_nome, p.endereco_entrega, p.total::numeric
+  const { rows } = await pool.query<{ id: string; cliente_nome: string | null; endereco_entrega: string | null; zona_entrega: string | null; micro_regiao_entrega: string | null; total: string }>(
+    `SELECT p.id, c.nome AS cliente_nome, p.endereco_entrega, p.zona_entrega, p.micro_regiao_entrega, p.total::numeric
      FROM pedidos_venda p
      LEFT JOIN clientes c ON c.id = p.cliente_id
      WHERE p.tipo_entrega = 'entrega' AND p.status = 'confirmado'
        AND NOT EXISTS (SELECT 1 FROM entregas e WHERE e.pedido_venda_id = p.id)
-     ORDER BY p.data_pedido`
+     ORDER BY p.zona_entrega ASC NULLS LAST, p.data_pedido`
   );
   return rows.map((r) => ({ ...r, total: Number(r.total) }));
 }

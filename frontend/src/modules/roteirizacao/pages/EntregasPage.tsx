@@ -1,14 +1,15 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/hooks/useAuth';
 import * as roteirizacaoService from '../services/roteirizacao.service';
 import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
 import { imprimirRota } from '../lib/rota-print';
+import { MapaEntregasEmbed } from '../components/MapaEntregasEmbed';
 import type { EntregaComPedido, Veiculo } from '../types/roteirizacao.types';
 import { formatDateBR } from '../../../shared/lib/format-date';
 
-type Pendente = { id: string; cliente_nome: string | null; endereco_entrega: string | null; total: number };
+type Pendente = { id: string; cliente_nome: string | null; endereco_entrega: string | null; zona_entrega: string | null; micro_regiao_entrega: string | null; total: number };
 
 function getRotasPorVeiculo(entregasDoDia: EntregaComPedido[]): Map<string, EntregaComPedido[]> {
   const mapa = new Map<string, EntregaComPedido[]>();
@@ -25,6 +26,7 @@ function getRotasPorVeiculo(entregasDoDia: EntregaComPedido[]): Map<string, Entr
 
 export function EntregasPage() {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const hoje = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [pendentes, setPendentes] = useState<Pendente[]>([]);
   const [entregas, setEntregas] = useState<EntregaComPedido[]>([]);
@@ -44,6 +46,9 @@ export function EntregasPage() {
   const [modalReagendar, setModalReagendar] = useState<EntregaComPedido | null>(null);
   const [reagendarData, setReagendarData] = useState(hoje);
   const [reagendarVeiculoId, setReagendarVeiculoId] = useState('');
+
+  const [filtroMacro, setFiltroMacro] = useState('');
+  const [filtroZona, setFiltroZona] = useState('');
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -97,10 +102,73 @@ export function EntregasPage() {
   };
 
   const selecionarTodosPendentes = () => {
-    setSelecionadosPendentes(new Set(pendentes.map((p) => p.id)));
+    setSelecionadosPendentes(new Set(pendentesFiltrados.map((p) => p.id)));
+  };
+
+  const getZonaDisplay = useCallback(
+    (p: Pendente) => p.micro_regiao_entrega?.trim() || p.zona_entrega?.trim() || 'Sem zona',
+    []
+  );
+
+  const selecionarZona = (zonaDisplay: string) => {
+    const filterZona = zonaDisplay === 'Sem zona' ? '' : zonaDisplay;
+    const ids = pendentesFiltrados.filter((p) => getZonaDisplay(p) === (filterZona || 'Sem zona')).map((p) => p.id);
+    setSelecionadosPendentes((prev) => {
+      const next = new Set(prev);
+      const todosSelecionados = ids.length > 0 && ids.every((id) => next.has(id));
+      if (todosSelecionados) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
   };
 
   const limparSelecao = () => setSelecionadosPendentes(new Set());
+
+  const pendentesFiltrados = useMemo(() => {
+    return pendentes.filter((p) => {
+      if (filtroMacro && (p.micro_regiao_entrega?.trim() || '') !== filtroMacro) return false;
+      if (filtroZona && (p.zona_entrega?.trim() || '') !== filtroZona) return false;
+      return true;
+    });
+  }, [pendentes, filtroMacro, filtroZona]);
+
+  const opcoesMacro = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of pendentes) {
+      const m = p.micro_regiao_entrega?.trim();
+      if (m) set.add(m);
+    }
+    return Array.from(set).sort();
+  }, [pendentes]);
+
+  const opcoesZona = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of pendentes) {
+      if (filtroMacro && (p.micro_regiao_entrega?.trim() || '') !== filtroMacro) continue;
+      const z = p.zona_entrega?.trim();
+      if (z) set.add(z);
+    }
+    return Array.from(set).sort();
+  }, [pendentes, filtroMacro]);
+
+  useEffect(() => {
+    if (filtroMacro && filtroZona && !opcoesZona.includes(filtroZona)) {
+      setFiltroZona('');
+    }
+  }, [filtroMacro, filtroZona, opcoesZona]);
+
+  const pendentesPorZona = useMemo(() => {
+    const map = new Map<string, Pendente[]>();
+    for (const p of pendentesFiltrados) {
+      const zona = getZonaDisplay(p);
+      if (!map.has(zona)) map.set(zona, []);
+      map.get(zona)!.push(p);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [pendentesFiltrados, getZonaDisplay]);
 
   const agendarSelecionados = async () => {
     if (!token || selecionadosPendentes.size === 0 || !agendarVeiculoId) return;
@@ -115,6 +183,7 @@ export function EntregasPage() {
       }
       setSelecionadosPendentes(new Set());
       await load();
+      navigate(`/roteirizacao/entregas/resumo?data=${encodeURIComponent(agendarData)}&veiculo=${encodeURIComponent(agendarVeiculoId)}`);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Erro ao agendar');
     } finally {
@@ -281,29 +350,89 @@ export function EntregasPage() {
             </div>
           </div>
 
-          {/* Pendentes de agendamento — cards touch-friendly */}
-          <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-5 md:px-6 py-5 bg-gray-50 border-b border-gray-200">
-              <h2 className="text-lg md:text-xl font-semibold text-gray-900">
-                Pedidos aguardando ({pendentes.length})
-              </h2>
-              <p className="text-sm md:text-base text-gray-500 mt-1">
-                Selecione, escolha veículo e data, depois agende
-              </p>
+          {/* Filtros + Mapa + Pendentes */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Coluna 1: Mapa (visível primeiro) */}
+            <div className="lg:col-span-2 order-1">
+              <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden p-4 md:p-5">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">Mapa de entregas</h2>
+                <MapaEntregasEmbed
+                  token={token}
+                  onRefresh={load}
+                  pedidoIdsFilter={
+                    selecionadosPendentes.size > 0
+                      ? Array.from(selecionadosPendentes)
+                      : filtroMacro || filtroZona
+                        ? pendentesFiltrados.map((p) => p.id)
+                        : undefined
+                  }
+                />
+              </section>
             </div>
-            {pendentes.length === 0 ? (
-              <div className="p-10 text-center text-gray-500">
-                <p className="text-base">Nenhum pedido aguardando.</p>
-                <Link
-                  to="/vendas"
-                  className="inline-block mt-4 min-h-[48px] px-6 py-3 text-brand-gold hover:underline font-medium rounded-xl border border-brand-gold/30 touch-manipulation active:bg-amber-50"
-                >
-                  Ver vendas →
-                </Link>
-              </div>
-            ) : (
-              <>
-                <div className="p-5 md:p-6 border-b border-gray-200 flex flex-col md:flex-row md:flex-wrap md:items-end gap-4 md:gap-5">
+
+            {/* Coluna 2: Filtros e lista de pendentes */}
+            <div className="lg:col-span-1 order-2">
+              <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-5 md:px-6 py-5 bg-gray-50 border-b border-gray-200 space-y-4">
+                  <h2 className="text-lg md:text-xl font-semibold text-gray-900">
+                    Pedidos aguardando ({pendentesFiltrados.length})
+                  </h2>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Macro região</label>
+                    <select
+                      value={filtroMacro}
+                      onChange={(e) => {
+                        setFiltroMacro(e.target.value);
+                        setFiltroZona('');
+                      }}
+                      className="w-full min-h-[44px] px-3 py-2 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
+                    >
+                      <option value="">Todas</option>
+                      {opcoesMacro.map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Zona</label>
+                    <select
+                      value={filtroZona}
+                      onChange={(e) => setFiltroZona(e.target.value)}
+                      className="w-full min-h-[44px] px-3 py-2 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
+                    >
+                      <option value="">Todas</option>
+                      {opcoesZona.map((z) => (
+                        <option key={z} value={z}>{z}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-sm md:text-base text-gray-500">
+                    Selecione, escolha veículo e data, depois agende
+                  </p>
+                </div>
+                {pendentesFiltrados.length === 0 ? (
+                  <div className="p-10 text-center text-gray-500">
+                    <p className="text-base">
+                      {pendentes.length === 0
+                        ? 'Nenhum pedido aguardando.'
+                        : 'Nenhum pedido para os filtros selecionados.'}
+                    </p>
+                    {pendentes.length === 0 ? (
+                      <Link
+                        to="/vendas"
+                        className="inline-block mt-4 min-h-[48px] px-6 py-3 text-brand-gold hover:underline font-medium rounded-xl border border-brand-gold/30 touch-manipulation active:bg-amber-50"
+                      >
+                        Ver vendas →
+                      </Link>
+                    ) : (
+                      <Button variant="secondary" className="mt-4" onClick={() => { setFiltroMacro(''); setFiltroZona(''); }}>
+                        Limpar filtros
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="p-5 md:p-6 border-b border-gray-200 flex flex-col gap-4">
                   <div className="flex items-center gap-3">
                     <Button variant="secondary" size="md" onClick={selecionarTodosPendentes}>
                       Selecionar todos
@@ -352,40 +481,60 @@ export function EntregasPage() {
                   </div>
                 </div>
                 <div className="divide-y divide-gray-100">
-                  {pendentes.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => toggleSelecaoPendente(p.id)}
-                      className="w-full px-5 md:px-6 py-4 md:py-5 flex items-center gap-4 md:gap-5 text-left hover:bg-gray-50 active:bg-amber-50/30 touch-manipulation transition-colors"
-                    >
-                      <span
-                        className={`flex-shrink-0 w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-colors ${
-                          selecionadosPendentes.has(p.id)
-                            ? 'bg-brand-gold border-brand-gold'
-                            : 'border-gray-300 bg-white'
-                        }`}
-                        aria-hidden
-                      >
-                        {selecionadosPendentes.has(p.id) && (
-                          <svg className="w-5 h-5 text-brand-black" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900 text-base md:text-lg">{p.cliente_nome ?? 'Retirada'}</p>
-                        <p className="text-sm md:text-base text-gray-600 truncate mt-0.5">{p.endereco_entrega ?? '—'}</p>
-                      </div>
-                      <span className="font-bold text-gray-800 whitespace-nowrap text-base md:text-lg">
-                        R$ {(p.total ?? 0).toFixed(2)}
-                      </span>
-                    </button>
+                  {pendentesPorZona.map(([zona, lista]) => (
+                    <div key={zona}>
+                      {pendentesPorZona.length > 1 && (
+                        <div className="px-5 md:px-6 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700">{zona}</span>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => selecionarZona(zona)}
+                          >
+                            {selecionadosPendentes.size > 0 && lista.every((p) => selecionadosPendentes.has(p.id))
+                              ? 'Desmarcar zona'
+                              : `Selecionar zona (${lista.length})`}
+                          </Button>
+                        </div>
+                      )}
+                      {lista.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => toggleSelecaoPendente(p.id)}
+                          className="w-full px-5 md:px-6 py-4 md:py-5 flex items-center gap-4 md:gap-5 text-left hover:bg-gray-50 active:bg-amber-50/30 touch-manipulation transition-colors"
+                        >
+                          <span
+                            className={`flex-shrink-0 w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-colors ${
+                              selecionadosPendentes.has(p.id)
+                                ? 'bg-brand-gold border-brand-gold'
+                                : 'border-gray-300 bg-white'
+                            }`}
+                            aria-hidden
+                          >
+                            {selecionadosPendentes.has(p.id) && (
+                              <svg className="w-5 h-5 text-brand-black" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-900 text-base md:text-lg">{p.cliente_nome ?? 'Retirada'}</p>
+                            <p className="text-sm md:text-base text-gray-600 truncate mt-0.5" title={p.endereco_entrega ?? undefined}>{p.endereco_entrega ?? '—'}</p>
+                          </div>
+                          <span className="font-bold text-gray-800 whitespace-nowrap text-base md:text-lg">
+                            R$ {(p.total ?? 0).toFixed(2)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   ))}
                 </div>
-              </>
-            )}
-          </section>
+                  </>
+                )}
+              </section>
+            </div>
+          </div>
 
           {/* Botão global: sugerir ordem em todas as rotas */}
           {datasOrdenadas.length > 0 && (
@@ -405,15 +554,15 @@ export function EntregasPage() {
             </div>
           )}
 
-          {/* Rotas por dia — ordem cronológica */}
-          {datasOrdenadas.length === 0 ? (
-            <section>
+          {/* Listagem de entregas — rotas por dia */}
+          <section>
+            <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">Listagem de entregas</h2>
+            {datasOrdenadas.length === 0 ? (
               <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-500">
                 <p className="text-base">Nenhuma entrega agendada.</p>
                 <p className="text-sm mt-2">Agende pedidos acima para ver as rotas por dia.</p>
               </div>
-            </section>
-          ) : (
+            ) : (
             datasOrdenadas.map((data) => {
               const entregasDoDia = entregasAgendadas.filter((e) => e.data_entrega_prevista === data);
               const rotasPorVeiculo = getRotasPorVeiculo(entregasDoDia);
@@ -518,7 +667,8 @@ export function EntregasPage() {
                 </section>
               );
             })
-          )}
+            )}
+          </section>
 
           <p className="text-base">
             <Link

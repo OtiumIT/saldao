@@ -1,6 +1,61 @@
 import type { EntregaComPedido } from '../types/roteirizacao.types';
 import { formatDateBR } from '../../../shared/lib/format-date';
 
+/** Coordenadas para desenho simplificado do mapa (SVG estático, mínimo de riscos na impressão). */
+interface PontoMapa {
+  lat: number;
+  lon: number;
+  label: string;
+}
+
+/** Gera SVG simplificado da rota para impressão (sem Leaflet, sem APIs externas). */
+function buildMapaSvg(pontos: PontoMapa[], width: number, height: number): string {
+  if (pontos.length === 0) return '';
+  if (pontos.length === 1) {
+    const p = pontos[0];
+    const cx = width / 2;
+    const cy = height / 2;
+    return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="#f8fafc"/>
+  <circle cx="${cx}" cy="${cy}" r="12" fill="#ea580c" stroke="#fff" stroke-width="2"/>
+  <text x="${cx}" y="${cy - 18}" text-anchor="middle" font-size="12" font-weight="600" fill="#333">1</text>
+</svg>`;
+  }
+  const lats = pontos.map((p) => p.lat);
+  const lons = pontos.map((p) => p.lon);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLon = Math.min(...lons);
+  const maxLon = Math.max(...lons);
+  const padLat = (maxLat - minLat) * 0.1 || 0.01;
+  const padLon = (maxLon - minLon) * 0.1 || 0.01;
+  const rangeLat = maxLat - minLat + padLat * 2 || 0.02;
+  const rangeLon = maxLon - minLon + padLon * 2 || 0.02;
+  const margin = 24;
+  const w = width - margin * 2;
+  const h = height - margin * 2;
+
+  const toX = (lon: number) => margin + ((lon - minLon + padLon) / rangeLon) * w;
+  const toY = (lat: number) => height - margin - ((lat - minLat + padLat) / rangeLat) * h;
+
+  const pathD = pontos
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(p.lon)} ${toY(p.lat)}`)
+    .join(' ');
+  const circles = pontos
+    .map(
+      (p, i) =>
+        `<circle cx="${toX(p.lon)}" cy="${toY(p.lat)}" r="6" fill="#ea580c" stroke="#fff" stroke-width="2"/>
+         <text x="${toX(p.lon)}" y="${toY(p.lat) - 10}" text-anchor="middle" font-size="10" font-weight="600" fill="#333">${i + 1}</text>`
+    )
+    .join('');
+
+  return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="#f8fafc"/>
+  <path d="${pathD}" fill="none" stroke="#ea580c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  ${circles}
+</svg>`;
+}
+
 function escapeHtml(s: string): string {
   const el = document.createElement('div');
   el.textContent = s;
@@ -10,11 +65,13 @@ function escapeHtml(s: string): string {
 /**
  * Monta o HTML da rota de entrega para impressão.
  * Economia de tinta: sem preenchimento preto, fontes finas (300/400).
+ * Inclui mapa SVG simplificado quando há coordenadas (mínimo de riscos).
  */
 function buildRotaHtml(
   dataEntrega: string,
   nomeVeiculo: string,
-  lista: EntregaComPedido[]
+  lista: EntregaComPedido[],
+  incluirMapa = true
 ): string {
   const paradas = lista
     .map(
@@ -29,6 +86,15 @@ function buildRotaHtml(
     </tr>`
     )
     .join('');
+
+  const pontosComCoords = lista
+    .filter((e) => e.endereco_lat != null && e.endereco_lon != null && !Number.isNaN(e.endereco_lat!) && !Number.isNaN(e.endereco_lon!))
+    .map((e, i) => ({
+      lat: e.endereco_lat!,
+      lon: e.endereco_lon!,
+      label: String(i + 1),
+    }));
+  const mapaSvg = incluirMapa && pontosComCoords.length >= 1 ? buildMapaSvg(pontosComCoords, 400, 180) : '';
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -68,6 +134,8 @@ function buildRotaHtml(
     .valor { font-size: 9.5pt; color: #666; }
     .num { font-variant-numeric: tabular-nums; }
     .footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 9pt; color: #666; text-align: center; font-weight: 300; }
+    .mapa-print { margin: 12px 0; border: 1px solid #ddd; border-radius: 4px; overflow: hidden; }
+    .mapa-print svg { display: block; width: 100%; height: auto; }
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
@@ -81,6 +149,7 @@ function buildRotaHtml(
       <strong>Data:</strong> ${formatDateBR(dataEntrega)} &nbsp;|&nbsp; <strong>Veículo:</strong> ${escapeHtml(nomeVeiculo)} &nbsp;|&nbsp; <strong>Paradas:</strong> ${lista.length}
     </div>
   </header>
+  ${mapaSvg ? `<div class="mapa-print">${mapaSvg}</div>` : ''}
 
   <table>
     <thead>
@@ -112,7 +181,7 @@ export function imprimirRota(
   if (lista.length === 0) {
     return;
   }
-  const html = buildRotaHtml(dataEntrega, nomeVeiculo, lista);
+  const html = buildRotaHtml(dataEntrega, nomeVeiculo, lista, true);
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const w = window.open(url, '_blank', 'noopener,noreferrer');
@@ -129,4 +198,15 @@ export function imprimirRota(
       // janela pode ter sido fechada
     }
   });
+}
+
+/**
+ * Imprime rota com mapa SVG simplificado (mesmo que imprimirRota, alias para compatibilidade).
+ */
+export function imprimirRotaComMapa(
+  dataEntrega: string,
+  nomeVeiculo: string,
+  lista: EntregaComPedido[]
+): void {
+  imprimirRota(dataEntrega, nomeVeiculo, lista);
 }

@@ -27,6 +27,10 @@ export interface PedidoVenda {
   endereco_lat?: number | null;
   /** Longitude do endereço de entrega (geocode). */
   endereco_lon?: number | null;
+  /** Bairro/região de entrega (reverse geocode). Usado para agrupar por zona. */
+  zona_entrega?: string | null;
+  /** Micro-região de entrega (ex.: Leste 1, Leste 2). Mapeado de subprefeitura SP. */
+  micro_regiao_entrega?: string | null;
   observacoes: string | null;
   total: number;
   /** Promessa de entrega em X dias quando há item sem estoque */
@@ -69,6 +73,8 @@ export interface CreatePedidoVendaRequest {
   data_pedido?: string;
   tipo_entrega: TipoEntrega;
   endereco_entrega?: string | null;
+  /** CEP do cliente (para atualizar cadastro ao criar venda com entrega) */
+  cliente_cep?: string | null;
   observacoes?: string | null;
   /** Quando há item sem estoque, informe a previsão de entrega em dias (ex.: 7) */
   previsao_entrega_em_dias?: number | null;

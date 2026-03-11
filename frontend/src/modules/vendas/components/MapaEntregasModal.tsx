@@ -25,21 +25,33 @@ import type { PedidoVendaComCliente } from '../types/vendas.types';
 import type { Cliente } from '../../clientes/types/clients.types';
 import { formatDateBR } from '../../../shared/lib/format-date';
 
-// Ícone entrega (âmbar)
+// Ícone entrega (caminhão/entrega, mais chamativo)
 const markerIconEntrega = L.divIcon({
   className: 'mapa-entregas-marker mapa-entregas-marker-entrega',
-  html: '<div style="width:24px;height:24px;background:#f59e0b;border:2px solid white;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
+  html: `<div class="mapa-marker-entrega">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="1" y="3" width="15" height="13"></rect>
+      <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+      <circle cx="5.5" cy="18.5" r="2.5"></circle>
+      <circle cx="18.5" cy="18.5" r="2.5"></circle>
+    </svg>
+  </div>`,
+  iconSize: [40, 40],
+  iconAnchor: [20, 20],
+  popupAnchor: [0, -20],
 });
 
-// Ícone loja (DivIcon evita erro 404 de imagem; verde para distinguir das entregas)
+// Ícone loja (círculo com logo dentro)
+const logoUrl = '/logo.png';
 const markerIconLoja = L.divIcon({
   className: 'mapa-entregas-marker mapa-entregas-marker-loja',
-  html: '<div style="width:32px;height:32px;background:#22c55e;border:2px solid white;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:14px;">L</div>',
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-  popupAnchor: [0, -16],
+  html: `<div class="mapa-marker-loja">
+    <img src="${logoUrl}" alt="Loja" onerror="this.style.display='none';this.nextElementSibling?.classList.remove('mapa-marker-loja-fallback');" />
+    <span class="mapa-marker-loja-fallback">L</span>
+  </div>`,
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
+  popupAnchor: [0, -22],
 });
 
 type FiltroDatas = 'todas' | 'hoje' | '7' | '15' | 'range';
@@ -105,7 +117,10 @@ export function MapaEntregasModal({ isOpen, onClose, token }: MapaEntregasModalP
   const [geocodeProgress, setGeocodeProgress] = useState({ done: 0, total: 0 });
   const [error, setError] = useState<string | null>(null);
   const [pedidoIdModal, setPedidoIdModal] = useState<string | null>(null);
-  const [enderecoLoja, setEnderecoLoja] = useState<string | null>(null);
+  const [enderecoLoja, setEnderecoLoja] = useState<{ endereco: string | null; lat: number | null; lon: number | null } | null>(null);
+  const [enderecosNaoLocalizados, setEnderecosNaoLocalizados] = useState<
+    Array<{ id: string; cliente_nome: string | null; endereco_entrega: string; data_pedido: string }>
+  >([]);
 
   const carregarClientes = useCallback(async () => {
     if (!token) return;
@@ -179,35 +194,46 @@ export function MapaEntregasModal({ isOpen, onClose, token }: MapaEntregasModalP
     const addresses = selecionados.map((e) => e.endereco_entrega!).filter(Boolean);
     if (addresses.length === 0) return;
 
-    const storeAddr = enderecoLoja?.trim();
+    const storeAddr = enderecoLoja?.endereco?.trim() ?? null;
+    const storeLat = enderecoLoja?.lat;
+    const storeLon = enderecoLoja?.lon;
+    const storeTemCoords = storeLat != null && storeLon != null && !Number.isNaN(storeLat) && !Number.isNaN(storeLon);
+
     const pedidosSemCoords = selecionados.filter(
       (p) =>
         p.endereco_entrega &&
         (p.endereco_lat == null || p.endereco_lon == null || Number.isNaN(p.endereco_lat) || Number.isNaN(p.endereco_lon))
     );
     const addressesToGeocode = pedidosSemCoords.map((p) => p.endereco_entrega!);
-    if (storeAddr) addressesToGeocode.push(storeAddr);
+    if (storeAddr && !storeTemCoords) addressesToGeocode.push(storeAddr);
 
     let cancelled = false;
+    setEnderecosNaoLocalizados([]);
 
     const renderMap = (results: Map<string, { lat: number; lon: number }> = new Map()) => {
       if (cancelled || !mapRef.current) return;
 
       let storeGeo: { lat: number; lon: number } | null = null;
       if (storeAddr) {
-        const geo = results.get(storeAddr) ?? results.get(storeAddr);
-        if (geo) storeGeo = { lat: geo.lat, lon: geo.lon };
+        if (storeTemCoords) {
+          storeGeo = { lat: Number(storeLat), lon: Number(storeLon) };
+        } else {
+          const geo = results.get(storeAddr) ?? results.get(storeAddr);
+          if (geo) storeGeo = { lat: geo.lat, lon: geo.lon };
+        }
       }
 
       setTimeout(() => {
         if (cancelled || !mapRef.current) return;
-        const map = L.map(mapRef.current).setView([-23.5505, -46.6333], 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap',
+        const map = L.map(mapRef.current, { maxZoom: 15 }).setView([-23.5505, -46.6333], 12);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap © CARTO',
+          maxZoom: 15,
         }).addTo(map);
 
         mapInstanceRef.current = map;
         const markers: L.Marker[] = [];
+        const naoLocalizados: Array<{ id: string; cliente_nome: string | null; endereco_entrega: string; data_pedido: string }> = [];
 
         if (storeGeo) {
           const storeMarker = L.marker([storeGeo.lat, storeGeo.lon], { icon: markerIconLoja })
@@ -229,7 +255,15 @@ export function MapaEntregasModal({ isOpen, onClose, token }: MapaEntregasModalP
             const addr = pedido.endereco_entrega!;
             geo = results.get(addr) ?? results.get(addr.trim()) ?? null;
           }
-          if (!geo) return;
+          if (!geo) {
+            naoLocalizados.push({
+              id: pedido.id,
+              cliente_nome: pedido.cliente_nome ?? null,
+              endereco_entrega: pedido.endereco_entrega ?? '',
+              data_pedido: pedido.data_pedido,
+            });
+            return;
+          }
 
           const marker = L.marker([geo.lat, geo.lon], { icon: markerIconEntrega })
             .addTo(map)
@@ -252,6 +286,7 @@ export function MapaEntregasModal({ isOpen, onClose, token }: MapaEntregasModalP
           markers.push(marker);
         });
 
+        if (!cancelled) setEnderecosNaoLocalizados(naoLocalizados);
         markersRef.current = markers;
 
           if (markers.length > 0) {
@@ -500,16 +535,56 @@ export function MapaEntregasModal({ isOpen, onClose, token }: MapaEntregasModalP
                   Localizando endereços... {geocodeProgress.done}/{geocodeProgress.total}
                 </p>
               )}
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap items-center">
                 <Button variant="secondary" size="sm" onClick={() => setEtapa('selecao')}>
                   Voltar à seleção
                 </Button>
-                {enderecoLoja && (
+                {enderecoLoja?.endereco && (
                   <span className="text-xs text-gray-500 self-center">
-                    Loja: {enderecoLoja}
+                    Loja: {enderecoLoja.endereco}
                   </span>
                 )}
               </div>
+              {enderecosNaoLocalizados.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-sm font-medium text-amber-900 mb-2">
+                    {enderecosNaoLocalizados.length} endereço(s) não localizado(s) — revise o cadastro
+                  </p>
+                  <div className="max-h-[140px] overflow-y-auto space-y-2">
+                    {enderecosNaoLocalizados.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-start justify-between gap-2 text-sm bg-white rounded border border-amber-100 p-2"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-900 truncate" title={item.cliente_nome ?? undefined}>{item.cliente_nome ?? 'Cliente'}</p>
+                          <p className="text-xs text-gray-600 truncate" title={item.endereco_entrega}>
+                            {item.endereco_entrega}
+                          </p>
+                          <p className="text-xs text-gray-500">{formatDateBR(item.data_pedido)}</p>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <a
+                            href={`/vendas/${item.id}?editar=endereco`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-lg border border-amber-600 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors"
+                          >
+                            Edite o Endereço
+                          </a>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setPedidoIdModal(item.id)}
+                          >
+                            Ver compra
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

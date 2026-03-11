@@ -28,6 +28,7 @@ export async function runGeocodeJob(env: Env): Promise<{ processed: number; upda
       `SELECT id, endereco_entrega FROM pedidos_venda
        WHERE tipo_entrega = 'entrega' AND endereco_entrega IS NOT NULL
          AND (endereco_lat IS NULL OR endereco_lon IS NULL)
+         AND (endereco_geocode_falhou IS NOT TRUE)
        ORDER BY data_pedido DESC
        LIMIT $1`,
       [LIMIT_PER_RUN]
@@ -42,6 +43,11 @@ export async function runGeocodeJob(env: Env): Promise<{ processed: number; upda
           [geo.lat, geo.lon, row.id]
         );
         updated++;
+      } else {
+        await pool.query(
+          `UPDATE pedidos_venda SET endereco_geocode_falhou = true, updated_at = NOW() WHERE id = $1`,
+          [row.id]
+        );
       }
       await new Promise((r) => setTimeout(r, 1100));
     }

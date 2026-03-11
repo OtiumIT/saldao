@@ -12,6 +12,8 @@ export interface Column<T> {
   render?: (item: T) => ReactNode;
   sortValue?: (item: T) => string | number | Date;
   filterValue?: (item: T) => string;
+  /** Texto exibido no hover quando o dado está truncado/abreviado */
+  titleValue?: (item: T) => string;
 }
 
 interface DataTableProps<T> {
@@ -260,7 +262,10 @@ export function DataTable<T extends Record<string, any>>({
                             <span className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-0.5">
                               {column.label}
                             </span>
-                            <span className="text-base font-semibold text-gray-900 break-words">
+                            <span
+                              className="text-base font-semibold text-gray-900 break-words"
+                              title={column.titleValue?.(item) ?? undefined}
+                            >
                               {column.render ? column.render(item) : String((item as any)[column.key] ?? '-')}
                             </span>
                           </div>
@@ -271,7 +276,10 @@ export function DataTable<T extends Record<string, any>>({
                   {restCols.map((column) => (
                     <div key={column.key} className="flex justify-between gap-2 text-sm items-start">
                       <span className="text-gray-500 font-medium shrink-0 pt-0.5">{column.label}</span>
-                      <span className="text-gray-900 text-right break-all min-w-0">
+                      <span
+                        className="text-gray-900 text-right break-all min-w-0"
+                        title={column.titleValue?.(item) ?? undefined}
+                      >
                         {column.render ? column.render(item) : String((item as any)[column.key] ?? '-')}
                       </span>
                     </div>
@@ -334,7 +342,11 @@ export function DataTable<T extends Record<string, any>>({
                     onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(item); } } : undefined}
                   >
                     {columns.map((column) => (
-                      <td key={column.key} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td
+                        key={column.key}
+                        className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
+                        title={column.titleValue?.(item) ?? undefined}
+                      >
                         {column.render ? column.render(item) : String((item as any)[column.key] || '-')}
                       </td>
                     ))}

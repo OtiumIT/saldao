@@ -200,11 +200,13 @@ export function CaixaPage() {
   }, []);
 
   const clientePreenchido = cliente_id.trim() !== '';
+  const cepValido = cep.replace(/\D/g, '').length === 8;
   const canFinalize =
     validCart.length > 0 &&
     clientePreenchido &&
     itensSemEstoqueNaoFabricados.length === 0 &&
     (!soFabricadosSemEstoque || (previsaoNum >= 1)) &&
+    (tipo_entrega !== 'entrega' || !endereco_entrega.trim() || cepValido) &&
     (tipo_entrega !== 'entrega' || (endereco_entrega.trim() && !Number.isNaN(kmNum) && kmNum >= 0)) &&
     (tipo_entrega !== 'entrega' || kmNum <= 13 || (!Number.isNaN(freteManualNum) && freteManualNum >= 0));
 
@@ -212,6 +214,10 @@ export function CaixaPage() {
     if (!token) return;
     if (!clientePreenchido) {
       setError('Informe o cliente: busque por CPF, CNPJ ou WhatsApp e vincule ou cadastre um novo.');
+      return;
+    }
+    if (tipo_entrega === 'entrega' && endereco_entrega.trim() && !cepValido) {
+      setError('CEP é obrigatório quando há endereço. Informe o CEP com 8 dígitos.');
       return;
     }
     const comQuantidadeInvalida = validCart.some((i) => !(i.quantidade >= 1));
@@ -254,6 +260,7 @@ export function CaixaPage() {
         cliente_id: cliente_id || null,
         tipo_entrega,
         endereco_entrega: tipo_entrega === 'entrega' ? endereco_entrega.trim() : null,
+        cliente_cep: tipo_entrega === 'entrega' && cliente_id && cep.trim() ? cep.replace(/\D/g, '').slice(0, 8) : undefined,
         observacoes: obsFinal,
         previsao_entrega_em_dias: soFabricadosSemEstoque && previsaoNum >= 1 ? previsaoNum : null,
         distancia_km: tipo_entrega === 'entrega' && !Number.isNaN(kmNum) ? kmNum : null,
@@ -354,9 +361,14 @@ export function CaixaPage() {
       const endereco = c.endereco_entrega?.trim() ?? '';
       if (endereco) {
         setEnderecoEntrega(endereco);
+        setCep(c.cep?.replace(/\D/g, '').slice(0, 8) ?? '');
         setErrorDistancia('');
         vendasService.getCalcularDistancia(endereco, token).then(
-          ({ km }) => setDistanciaKm(String(km)),
+          (r) => {
+            setDistanciaKm(String(r.km));
+            if (r.cep) setCep(r.cep);
+            if (r.endereco_formatado) setEnderecoEntrega(r.endereco_formatado);
+          },
           () => setErrorDistancia('Endereço preenchido. Distância pode ser calculada manualmente ou pelo botão "Calcular km".')
         );
       }
@@ -374,10 +386,15 @@ export function CaixaPage() {
     setShowCadastroRapido(false);
     const endereco = cliente.endereco_entrega?.trim() ?? '';
     setEnderecoEntrega(endereco);
+    setCep(cliente.cep?.replace(/\D/g, '').slice(0, 8) ?? '');
     setErrorDistancia('');
     if (endereco && token) {
       vendasService.getCalcularDistancia(endereco, token).then(
-        ({ km }) => setDistanciaKm(String(km)),
+        (r) => {
+          setDistanciaKm(String(r.km));
+          if (r.cep) setCep(r.cep);
+          if (r.endereco_formatado) setEnderecoEntrega(r.endereco_formatado);
+        },
         () => setErrorDistancia('Endereço preenchido. Distância pode ser calculada manualmente ou pelo botão "Calcular km".')
       );
     } else if (!endereco) {
@@ -465,10 +482,33 @@ export function CaixaPage() {
     setErrorDistancia('');
     setLoadingDistancia(true);
     try {
-      const { km } = await vendasService.getCalcularDistancia(end, token);
-      setDistanciaKm(String(km));
+      const result = await vendasService.getCalcularDistancia(end, token);
+      setDistanciaKm(String(result.km));
+      if (result.cep) setCep(result.cep);
+      if (result.endereco_formatado) setEnderecoEntrega(result.endereco_formatado);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao calcular distância';
+      setErrorDistancia(msg);
+    } finally {
+      setLoadingDistancia(false);
+    }
+  };
+
+  const handleEnriquecerEndereco = async () => {
+    const end = endereco_entrega.trim();
+    if (!end) {
+      setErrorDistancia('Informe o endereço de entrega.');
+      return;
+    }
+    if (!token) return;
+    setErrorDistancia('');
+    setLoadingDistancia(true);
+    try {
+      const result = await vendasService.getEnriquecerEndereco(end, token);
+      setEnderecoEntrega(result.endereco_formatado);
+      if (result.cep) setCep(result.cep);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao enriquecer endereço';
       setErrorDistancia(msg);
     } finally {
       setLoadingDistancia(false);
@@ -752,30 +792,42 @@ export function CaixaPage() {
                 <div className="space-y-3 rounded-xl bg-slate-50 border border-slate-200 p-3">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <Input
-                      label="CEP"
+                      label={endereco_entrega.trim() ? 'CEP *' : 'CEP'}
                       value={cep}
                       onChange={(e) => setCep(e.target.value.replace(/\D/g, '').slice(0, 8))}
                       placeholder="00000000"
                       className="sm:col-span-1"
+                      required={!!endereco_entrega.trim()}
                     />
-                    <div className="sm:col-span-2 flex items-end gap-2">
+                    <div className="sm:col-span-2 flex items-end gap-2 flex-wrap">
                       <Input
                         label="Endereço"
                         value={endereco_entrega}
                         onChange={(e) => { setEnderecoEntrega(e.target.value); setErrorDistancia(''); }}
                         placeholder="Ou endereço completo"
-                        className="flex-1"
+                        className="flex-1 min-w-[180px]"
                       />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={handleCalcularDistancia}
-                        disabled={loadingDistancia || !endereco_entrega.trim()}
-                        className="shrink-0 mb-0.5"
-                      >
-                        {loadingDistancia ? '...' : 'Calcular km'}
-                      </Button>
+                      <div className="flex gap-1 shrink-0 mb-0.5">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleEnriquecerEndereco}
+                          disabled={loadingDistancia || !endereco_entrega.trim()}
+                          title="Preencher endereço completo e CEP via Google"
+                        >
+                          {loadingDistancia ? '...' : 'Enriquecer'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleCalcularDistancia}
+                          disabled={loadingDistancia || !endereco_entrega.trim()}
+                        >
+                          {loadingDistancia ? '...' : 'Calcular km'}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                   {errorDistancia && <p className="text-red-600 text-sm">{errorDistancia}</p>}

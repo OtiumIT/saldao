@@ -24,6 +24,10 @@ export interface PedidoVenda {
   endereco_lat: number | null;
   /** Longitude do endereço de entrega (geocode). */
   endereco_lon: number | null;
+  /** Bairro/região de entrega (reverse geocode). Usado para agrupar por zona. */
+  zona_entrega: string | null;
+  /** Micro-região de entrega (ex.: Leste 1, Leste 2). Mapeado de subprefeitura SP. */
+  micro_regiao_entrega: string | null;
   observacoes: string | null;
   total: number;
   /** Promessa de entrega em X dias quando há item sem estoque */
@@ -65,7 +69,7 @@ export async function list(filtros?: {
 }): Promise<PedidoVendaComCliente[]> {
   const pool = getPool();
   if (!pool) return [];
-  let sql = `SELECT DISTINCT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.endereco_lat::numeric, p.endereco_lon::numeric, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.valor_extras_entrega::numeric, p.valor_extras_livre::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
+  let sql = `SELECT DISTINCT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.endereco_lat::numeric, p.endereco_lon::numeric, p.zona_entrega, p.micro_regiao_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.valor_extras_entrega::numeric, p.valor_extras_livre::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
     c.nome AS cliente_nome, c.fone AS cliente_fone FROM pedidos_venda p LEFT JOIN clientes c ON c.id = p.cliente_id`;
   const params: unknown[] = [];
   let i = 1;
@@ -151,7 +155,7 @@ export async function findById(id: string): Promise<PedidoVendaComCliente | null
   const pool = getPool();
   if (!pool) return null;
   const { rows } = await pool.query<PedidoVendaComCliente & { taxa_parcelamento_percentual: string | null; valor_extras_entrega: string | null }>(
-    `SELECT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.endereco_lat::numeric, p.endereco_lon::numeric, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.valor_extras_entrega::numeric, p.valor_extras_livre::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
+    `SELECT p.id, p.cliente_id, p.data_pedido::text, p.tipo_entrega, p.status, p.endereco_entrega, p.endereco_lat::numeric, p.endereco_lon::numeric, p.zona_entrega, p.micro_regiao_entrega, p.observacoes, p.total, p.previsao_entrega_em_dias, p.distancia_km::numeric, p.valor_frete::numeric, p.valor_extras_entrega::numeric, p.valor_extras_livre::numeric, p.parcelas, p.taxa_parcelamento_percentual::numeric, p.created_at, p.updated_at,
      c.nome AS cliente_nome, c.fone AS cliente_fone, c.cep AS cliente_cep FROM pedidos_venda p LEFT JOIN clientes c ON c.id = p.cliente_id WHERE p.id = $1`,
     [id]
   );

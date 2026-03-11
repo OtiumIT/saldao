@@ -100,7 +100,7 @@ export async function listEntregas(
   });
 
   const pedidoIds = [...new Set(entregas.map((e) => e.pedido_venda_id))];
-  const pedidos = await db.select<{ id: string; cliente_id: string | null; endereco_entrega: string | null; total: number }>(
+  const pedidos = await db.select<{ id: string; cliente_id: string | null; endereco_entrega: string | null; endereco_lat: number | null; endereco_lon: number | null; total: number }>(
     client,
     'pedidos_venda',
     {
@@ -125,6 +125,8 @@ export async function listEntregas(
       ...e,
       cliente_nome: cliente?.nome ?? null,
       endereco_entrega: pedido?.endereco_entrega ?? null,
+      endereco_lat: pedido?.endereco_lat ?? null,
+      endereco_lon: pedido?.endereco_lon ?? null,
       total: pedido?.total ?? 0,
     };
   }).sort((a, b) => {
@@ -135,9 +137,61 @@ export async function listEntregas(
   });
 }
 
-export async function listPedidosPendentesEntrega(env: Env): Promise<Array<{ id: string; cliente_nome: string | null; endereco_entrega: string | null; total: number }>> {
+export async function listPedidosParaMapa(env: Env): Promise<
+  Array<{
+    id: string;
+    cliente_nome: string | null;
+    endereco_entrega: string | null;
+    endereco_lat: number | null;
+    endereco_lon: number | null;
+    data_pedido: string;
+    data_entrega_prevista: string | null;
+  }>
+> {
   const client = getDataClient(env);
-  const pedidos = await db.select<{ id: string; cliente_id: string | null; endereco_entrega: string | null; total: number }>(
+  const pedidos = await db.select<{
+    id: string;
+    cliente_id: string | null;
+    endereco_entrega: string | null;
+    endereco_lat: number | null;
+    endereco_lon: number | null;
+    data_pedido: string;
+  }>(client, 'pedidos_venda', {
+    filters: { tipo_entrega: 'entrega', status: 'confirmado' },
+    orderBy: { column: 'data_pedido', ascending: false },
+  });
+  const comEndereco = pedidos.filter((p) => p.endereco_entrega?.trim());
+  const entregas = await db.select<{ pedido_venda_id: string; data_entrega_prevista: string | null; status: string }>(
+    client,
+    'entregas',
+    {}
+  );
+  const agendadasIds = new Set(
+    entregas.filter((e) => e.status === 'pendente' || e.status === 'em_rota').map((e) => e.pedido_venda_id)
+  );
+  const entregasMap = new Map(entregas.map((e) => [e.pedido_venda_id, e]));
+  const paraMapa = comEndereco.filter(
+    (p) => agendadasIds.has(p.id) || !entregasMap.has(p.id)
+  );
+  const clienteIds = [...new Set(paraMapa.map((p) => p.cliente_id).filter((id): id is string => id !== null))];
+  const clientes = clienteIds.length > 0
+    ? await db.select<{ id: string; nome: string }>(client, 'clientes', { filters: { id: clienteIds } })
+    : [];
+  const clientesMap = new Map(clientes.map((c) => [c.id, c]));
+  return paraMapa.map((p) => ({
+    id: p.id,
+    cliente_nome: p.cliente_id ? clientesMap.get(p.cliente_id)?.nome ?? null : null,
+    endereco_entrega: p.endereco_entrega,
+    endereco_lat: p.endereco_lat != null ? Number(p.endereco_lat) : null,
+    endereco_lon: p.endereco_lon != null ? Number(p.endereco_lon) : null,
+    data_pedido: p.data_pedido,
+    data_entrega_prevista: entregasMap.get(p.id)?.data_entrega_prevista ?? null,
+  }));
+}
+
+export async function listPedidosPendentesEntrega(env: Env): Promise<Array<{ id: string; cliente_nome: string | null; endereco_entrega: string | null; zona_entrega: string | null; micro_regiao_entrega: string | null; total: number }>> {
+  const client = getDataClient(env);
+  const pedidos = await db.select<{ id: string; cliente_id: string | null; endereco_entrega: string | null; zona_entrega: string | null; micro_regiao_entrega: string | null; total: number }>(
     client,
     'pedidos_venda',
     {
@@ -159,12 +213,21 @@ export async function listPedidosPendentesEntrega(env: Env): Promise<Array<{ id:
 
   const clientesMap = new Map(clientes.map((c) => [c.id, c]));
 
-  return pendentes.map((p) => ({
+  const result = pendentes.map((p) => ({
     id: p.id,
     cliente_nome: p.cliente_id ? clientesMap.get(p.cliente_id)?.nome ?? null : null,
     endereco_entrega: p.endereco_entrega,
+    zona_entrega: p.zona_entrega ?? null,
+    micro_regiao_entrega: p.micro_regiao_entrega ?? null,
     total: p.total,
   }));
+  result.sort((a, b) => {
+    const za = a.zona_entrega ?? '';
+    const zb = b.zona_entrega ?? '';
+    if (za !== zb) return za.localeCompare(zb);
+    return 0;
+  });
+  return result;
 }
 
 export async function createEntrega(

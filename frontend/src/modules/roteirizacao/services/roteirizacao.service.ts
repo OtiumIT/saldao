@@ -28,8 +28,31 @@ export async function listEntregas(
   return apiClient.get<EntregaComPedido[]>(`/api/roteirizacao/entregas${q ? `?${q}` : ''}`, token);
 }
 
-export async function listPendentesEntrega(token: string): Promise<Array<{ id: string; cliente_nome: string | null; endereco_entrega: string | null; total: number }>> {
-  return apiClient.get(`/api/roteirizacao/entregas/pendentes`, token);
+export type PendenteEntrega = {
+  id: string;
+  cliente_nome: string | null;
+  endereco_entrega: string | null;
+  zona_entrega: string | null;
+  micro_regiao_entrega: string | null;
+  total: number;
+};
+
+export async function listPendentesEntrega(token: string): Promise<PendenteEntrega[]> {
+  return apiClient.get<PendenteEntrega[]>(`/api/roteirizacao/entregas/pendentes`, token);
+}
+
+export type PedidoParaMapa = {
+  id: string;
+  cliente_nome: string | null;
+  endereco_entrega: string | null;
+  endereco_lat: number | null;
+  endereco_lon: number | null;
+  data_pedido: string;
+  data_entrega_prevista: string | null;
+};
+
+export async function listPedidosParaMapa(token: string): Promise<PedidoParaMapa[]> {
+  return apiClient.get<PedidoParaMapa[]>(`/api/roteirizacao/entregas/mapa`, token);
 }
 
 export async function createEntrega(

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { Button } from '../../../components/ui/Button';
+import { Input } from '../../../components/ui/Input';
 import * as vendasService from '../services/vendas.service';
 import { imprimirPedido, abrirWhatsAppPedido } from '../lib/pedido-print-whatsapp';
 import type { PedidoVendaComItens } from '../types/vendas.types';
@@ -16,10 +17,14 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function VendaDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const { token } = useAuth();
   const [pedido, setPedido] = useState<PedidoVendaComItens | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editandoEndereco, setEditandoEndereco] = useState(false);
+  const [enderecoEdit, setEnderecoEdit] = useState('');
+  const [salvandoEndereco, setSalvandoEndereco] = useState(false);
 
   useEffect(() => {
     if (!id || !token) return;
@@ -27,7 +32,13 @@ export function VendaDetailPage() {
     (async () => {
       try {
         const data = await vendasService.getPedidoVenda(id, token);
-        if (!cancelled) setPedido(data);
+        if (!cancelled) {
+          setPedido(data);
+          if (searchParams.get('editar') === 'endereco' && data?.tipo_entrega === 'entrega') {
+            setEditandoEndereco(true);
+            setEnderecoEdit(data.endereco_entrega ?? '');
+          }
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Erro ao carregar venda');
       } finally {
@@ -35,7 +46,23 @@ export function VendaDetailPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [id, token]);
+  }, [id, token, searchParams]);
+
+  const podeEditarEndereco = pedido?.status === 'rascunho' && pedido?.tipo_entrega === 'entrega';
+
+  const handleSalvarEndereco = async () => {
+    if (!id || !token || !pedido) return;
+    setSalvandoEndereco(true);
+    try {
+      const updated = await vendasService.updatePedidoVenda(id, { endereco_entrega: enderecoEdit.trim() || undefined }, token);
+      setPedido((prev) => (prev ? { ...prev, endereco_entrega: updated.endereco_entrega ?? prev.endereco_entrega } : prev));
+      setEditandoEndereco(false);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Erro ao salvar endereço');
+    } finally {
+      setSalvandoEndereco(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -74,39 +101,65 @@ export function VendaDetailPage() {
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <div><dt className="text-gray-500">Cliente</dt><dd className="font-medium text-gray-900">{pedido.cliente_nome ?? '—'}</dd></div>
             <div><dt className="text-gray-500">Entrega</dt><dd className="font-medium text-gray-900">{pedido.tipo_entrega === 'entrega' ? 'Sim' : 'Retirada'}</dd></div>
-            {pedido.endereco_entrega && (
+            {pedido.tipo_entrega === 'entrega' && (
               <div className="sm:col-span-2">
-                <dt className="text-gray-500">Endereço</dt>
-                <dd className="font-medium text-gray-900 flex flex-wrap items-center gap-2">
-                  <span>{pedido.endereco_entrega}</span>
-                  <span className="inline-flex items-center gap-3">
-                    <a
-                      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pedido.endereco_entrega)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-amber-600 hover:text-amber-700 font-medium"
-                      aria-label="Abrir rota no Google Maps"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      Google Maps
-                    </a>
-                    <a
-                      href={`https://waze.com/ul?q=${encodeURIComponent(pedido.endereco_entrega)}&navigate=yes`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
-                      aria-label="Abrir rota no Waze"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                      </svg>
-                      Waze
-                    </a>
-                  </span>
-                </dd>
+                <dt className="text-gray-500 mb-1">Endereço</dt>
+                {editandoEndereco ? (
+                  <dd className="space-y-2">
+                    <Input
+                      value={enderecoEdit}
+                      onChange={(e) => setEnderecoEdit(e.target.value)}
+                      placeholder="Rua, número, bairro, cidade..."
+                      className="w-full"
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleSalvarEndereco} disabled={salvandoEndereco}>
+                        {salvandoEndereco ? 'Salvando...' : 'Salvar'}
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={() => { setEditandoEndereco(false); setEnderecoEdit(pedido.endereco_entrega ?? ''); }} disabled={salvandoEndereco}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </dd>
+                ) : (
+                  <dd className="font-medium text-gray-900 flex flex-wrap items-center gap-2">
+                    <span>{pedido.endereco_entrega ?? '—'}</span>
+                    {podeEditarEndereco && (
+                      <Button variant="secondary" size="sm" onClick={() => { setEditandoEndereco(true); setEnderecoEdit(pedido.endereco_entrega ?? ''); }}>
+                        Editar endereço
+                      </Button>
+                    )}
+                    {pedido.endereco_entrega && (
+                      <span className="inline-flex items-center gap-3">
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pedido.endereco_entrega)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-sm text-amber-600 hover:text-amber-700 font-medium"
+                          aria-label="Abrir rota no Google Maps"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          Google Maps
+                        </a>
+                        <a
+                          href={`https://waze.com/ul?q=${encodeURIComponent(pedido.endereco_entrega)}&navigate=yes`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                          aria-label="Abrir rota no Waze"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                          </svg>
+                          Waze
+                        </a>
+                      </span>
+                    )}
+                  </dd>
+                )}
               </div>
             )}
             {pedido.distancia_km != null && pedido.distancia_km > 0 && (

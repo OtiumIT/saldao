@@ -25,6 +25,7 @@ import { ContasReceberPage } from './modules/financeiro/pages/ContasReceberPage'
 import { ResumoFinanceiroPage } from './modules/financeiro/pages/ResumoFinanceiroPage';
 import { VeiculosPage } from './modules/roteirizacao/pages/VeiculosPage';
 import { EntregasPage } from './modules/roteirizacao/pages/EntregasPage';
+import { ResumoEntregaPage } from './modules/roteirizacao/pages/ResumoEntregaPage';
 import { CategoriasCustoPage } from './modules/custos-operacionais/pages/CategoriasCustoPage';
 import { CustosMesPage } from './modules/custos-operacionais/pages/CustosMesPage';
 import { CategoriasProdutoPage } from './modules/categorias-produto/pages/CategoriasProdutoPage';
@@ -110,6 +111,7 @@ function App() {
           <Route path="/financeiro/resumo" element={<ProtectedRoute><ResumoFinanceiroPage /></ProtectedRoute>} />
           <Route path="/roteirizacao/veiculos" element={<ProtectedRoute><VeiculosPage /></ProtectedRoute>} />
           <Route path="/roteirizacao/entregas" element={<ProtectedRoute><EntregasPage /></ProtectedRoute>} />
+          <Route path="/roteirizacao/entregas/resumo" element={<ProtectedRoute><ResumoEntregaPage /></ProtectedRoute>} />
           <Route path="/custos-operacionais/categorias" element={<ProtectedRoute><CategoriasCustoPage /></ProtectedRoute>} />
           <Route path="/custos-operacionais/mes" element={<ProtectedRoute><CustosMesPage /></ProtectedRoute>} />
           <Route path="/funcionarios" element={<ProtectedRoute><FuncionariosListPage /></ProtectedRoute>} />

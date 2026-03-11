@@ -26,9 +26,22 @@ export async function getTotaisVendas(token: string): Promise<TotaisVendas> {
   return apiClient.get<TotaisVendas>('/api/vendas/totais', token);
 }
 
-export async function getEnderecoLoja(token: string): Promise<string | null> {
-  const res = await apiClient.get<{ endereco: string | null }>('/api/config/endereco-loja', token);
-  return res?.endereco ?? null;
+export interface EnderecoLoja {
+  endereco: string | null;
+  lat: number | null;
+  lon: number | null;
+}
+
+export async function getEnderecoLoja(token: string): Promise<EnderecoLoja> {
+  const res = await apiClient.get<{ endereco: string | null; lat?: number | null; lon?: number | null }>(
+    '/api/config/endereco-loja',
+    token
+  );
+  return {
+    endereco: res?.endereco ?? null,
+    lat: res?.lat ?? null,
+    lon: res?.lon ?? null,
+  };
 }
 
 export async function listPedidosVenda(
@@ -113,11 +126,27 @@ export async function getItensSugeridos(produtoId: string, token: string): Promi
 
 export interface CalcularDistanciaResponse {
   km: number;
+  /** CEP extraído do endereço via geocoding (quando disponível) */
+  cep?: string;
+  /** Endereço formatado completo (quando disponível) */
+  endereco_formatado?: string;
 }
 
 export async function getCalcularDistancia(endereco: string, token: string): Promise<CalcularDistanciaResponse> {
   return apiClient.get<CalcularDistanciaResponse>(
     `/api/vendas/calcular-distancia?endereco=${encodeURIComponent(endereco)}`,
+    token
+  );
+}
+
+export interface EnriquecerEnderecoResponse {
+  endereco_formatado: string;
+  cep: string | null;
+}
+
+export async function getEnriquecerEndereco(endereco: string, token: string): Promise<EnriquecerEnderecoResponse> {
+  return apiClient.get<EnriquecerEnderecoResponse>(
+    `/api/vendas/enriquecer-endereco?endereco=${encodeURIComponent(endereco)}`,
     token
   );
 }

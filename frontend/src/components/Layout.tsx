@@ -186,8 +186,8 @@ export function Layout({ children }: LayoutProps) {
                   {userMenuOpen && (
                     <div className="absolute right-0 top-full mt-1 py-1 w-56 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                       <div className="px-3 py-2 border-b border-gray-100">
-                        <p className="text-sm font-medium text-gray-900 truncate">{user?.name || 'Usuário'}</p>
-                        <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                        <p className="text-sm font-medium text-gray-900 truncate" title={user?.name || undefined}>{user?.name || 'Usuário'}</p>
+                        <p className="text-xs text-gray-500 truncate" title={user?.email ?? undefined}>{user?.email}</p>
                       </div>
                       <button
                         type="button"

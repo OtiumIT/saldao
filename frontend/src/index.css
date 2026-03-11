@@ -64,12 +64,54 @@ button, a, [role="button"] {
   }
 }
 
-/* Mapa de entregas: ícones customizados (evita CDN do Leaflet) */
+/* Mapa de entregas: ícones customizados */
 .mapa-entregas-marker.leaflet-marker-icon {
   background: transparent !important;
   border: none !important;
 }
-.mapa-entregas-marker-loja.leaflet-marker-icon {
-  background: transparent !important;
-  border: none !important;
+
+/* Entrega: caminhão em círculo laranja, mais chamativo */
+.mapa-marker-entrega {
+  width: 40px;
+  height: 40px;
+  background: #ea580c;
+  border: 3px solid white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.mapa-marker-entrega svg {
+  width: 22px;
+  height: 22px;
+  stroke: white;
+}
+
+/* Loja: círculo com logo */
+.mapa-marker-loja {
+  width: 44px;
+  height: 44px;
+  background: white;
+  border: 3px solid #22c55e;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.mapa-marker-loja img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+.mapa-marker-loja-fallback {
+  display: none;
+  font-weight: 700;
+  font-size: 20px;
+  color: #22c55e;
+}
+.mapa-marker-loja:has(img[style*="display: none"]) .mapa-marker-loja-fallback {
+  display: flex !important;
 }

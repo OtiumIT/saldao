@@ -1,7 +1,7 @@
 import type { Env } from '../../types/worker-env.js';
 import { getEnv } from '../../config/env.worker.js';
 import { useSupabaseDataAPI } from '../../config/db-mode.js';
-import { calcularDistanciaKm } from '../../lib/google-maps.js';
+import { calcularDistanciaKm, geocodeAddressEnriquecido } from '../../lib/google-maps.js';
 import * as repo from './vendas.repository.js';
 import * as repoSupabase from './vendas.repository.supabase.js';
 import { opcoesEntregaService } from '../opcoes-entrega/opcoes-entrega.service.js';
@@ -112,16 +112,28 @@ export const vendasService = {
     }
     return repo.getRelatorioVendas(filtros);
   },
-  async calcularDistancia(env: Env, enderecoDestino: string): Promise<{ km: number }> {
+  async calcularDistancia(env: Env, enderecoDestino: string): Promise<{ km: number; cep?: string; endereco_formatado?: string }> {
     const config = getEnv(env);
     if (!config.googleMaps.apiKey || !config.googleMaps.enderecoOrigemLoja) {
       throw new Error('Distância por endereço não configurada. Configure GOOGLE_MAPS_API_KEY e ENDERECO_ORIGEM_LOJA na API.');
     }
-    const { km } = await calcularDistanciaKm(
-      config.googleMaps.apiKey,
-      config.googleMaps.enderecoOrigemLoja,
-      enderecoDestino
-    );
-    return { km };
+    const [distResult, geo] = await Promise.all([
+      calcularDistanciaKm(
+        config.googleMaps.apiKey,
+        config.googleMaps.enderecoOrigemLoja,
+        enderecoDestino
+      ),
+      geocodeAddressEnriquecido(config.googleMaps.apiKey, enderecoDestino),
+    ]);
+    return {
+      km: distResult.km,
+      ...(geo?.cep ? { cep: geo.cep } : {}),
+      ...(geo?.endereco_formatado ? { endereco_formatado: geo.endereco_formatado } : {}),
+    };
+  },
+  async enriquecerEndereco(env: Env, endereco: string): Promise<{ endereco_formatado: string; cep: string | null } | null> {
+    const config = getEnv(env);
+    if (!config.googleMaps.apiKey) return null;
+    return geocodeAddressEnriquecido(config.googleMaps.apiKey, endereco);
   },
 };

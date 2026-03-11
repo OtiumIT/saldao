@@ -25,5 +25,12 @@ export const configRoutes = new Hono<WorkerContext>()
 
     const envConfig = getEnv(c.env);
     const endereco = envConfig.googleMaps?.enderecoOrigemLoja ?? '';
-    return c.json({ endereco: endereco.trim() || null });
+    // Coordenadas fixas: Av. da Barreira Grande, 2504, Vila Bancária, São Paulo, SP
+    const lat = -23.5871735;
+    const lon = -46.5125195;
+    return c.json({
+      endereco: endereco.trim() || null,
+      lat: endereco.trim() ? lat : null,
+      lon: endereco.trim() ? lon : null,
+    });
   });

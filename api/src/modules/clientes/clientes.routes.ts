@@ -6,7 +6,7 @@ import { clientesService } from './clientes.service.js';
 
 type Ctx = { Bindings: Env };
 
-const createSchema = z.object({
+const baseClienteSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
   cpf: z.string().optional().nullable(),
   cnpj: z.string().optional().nullable(),
@@ -18,7 +18,19 @@ const createSchema = z.object({
   observacoes: z.string().optional(),
 });
 
-const updateSchema = createSchema.partial();
+const createSchema = baseClienteSchema.refine(
+  (data) =>
+    !data.endereco_entrega?.trim() ||
+    (data.cep != null && data.cep.replace(/\D/g, '').length === 8),
+  { message: 'CEP é obrigatório quando há endereço (8 dígitos)', path: ['cep'] }
+);
+
+const updateSchema = baseClienteSchema.partial().refine(
+  (data) =>
+    !data.endereco_entrega?.trim() ||
+    (data.cep != null && data.cep.replace(/\D/g, '').length === 8),
+  { message: 'CEP é obrigatório quando há endereço (8 dígitos)', path: ['cep'] }
+);
 
 export const clientesRoutes = new Hono<Ctx>()
   .get('/', async (c) => {

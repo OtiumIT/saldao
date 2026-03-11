@@ -80,6 +80,12 @@ export const roteirizacaoRoutes = new Hono<Ctx>()
     const list = await roteirizacaoService.listPedidosPendentesEntrega(c.env);
     return c.json(list);
   })
+  .get('/entregas/mapa', async (c) => {
+    const auth = await requireAuth(c);
+    if (auth instanceof Response) return auth;
+    const list = await roteirizacaoService.listPedidosParaMapa(c.env);
+    return c.json(list);
+  })
   .post('/entregas', async (c) => {
     const auth = await requireAuth(c);
     if (auth instanceof Response) return auth;

@@ -490,16 +490,17 @@ export function VendasListPage() {
                 key: 'data_pedido',
                 label: 'Data',
                 sortable: true,
-                render: (p) => formatDateBR(p.data_pedido),
+                render: (p) => <span className="text-xs">{formatDateBR(p.data_pedido)}</span>,
                 sortValue: (p) => p.data_pedido,
               },
               {
                 key: 'cliente_nome',
                 label: 'Cliente',
                 sortable: true,
+                titleValue: (p) => p.cliente_nome ?? '',
                 render: (p) => (
-                  <div className="flex items-center gap-2">
-                    <span>{p.cliente_nome ?? 'Retirada'}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs max-w-[120px] truncate" title={p.cliente_nome ?? undefined}>{p.cliente_nome ?? 'Retirada'}</span>
                     <WhatsAppButton fone={p.cliente_fone} />
                   </div>
                 ),
@@ -507,20 +508,55 @@ export function VendasListPage() {
               },
               {
                 key: 'tipo_entrega',
-                label: 'Entrega',
+                label: 'Ent.',
                 render: (p) => (
-                  <span className={p.tipo_entrega === 'entrega' ? 'text-amber-700' : 'text-gray-500'}>
-                    {p.tipo_entrega === 'entrega' ? 'Sim' : 'Retirada'}
+                  <span className={`text-xs ${p.tipo_entrega === 'entrega' ? 'text-amber-700' : 'text-gray-500'}`}>
+                    {p.tipo_entrega === 'entrega' ? 'Sim' : 'Ret.'}
                   </span>
                 ),
                 sortValue: (p) => p.tipo_entrega,
+              },
+              {
+                key: 'micro_regiao_entrega',
+                label: 'Macro',
+                sortable: true,
+                titleValue: (p) => (p.tipo_entrega === 'entrega' ? (p.micro_regiao_entrega ?? '') : ''),
+                render: (p) => {
+                  if (p.tipo_entrega !== 'entrega') return <span className="text-xs text-gray-400">—</span>;
+                  const macro = p.micro_regiao_entrega?.trim() || '';
+                  const zona = p.zona_entrega?.trim() || '';
+                  // Se macro === zona (duplicado do Google), não repetir
+                  const exibir = macro && macro.toLowerCase() !== zona.toLowerCase() ? macro : '—';
+                  return (
+                    <span className="block max-w-[90px] truncate text-xs" title={exibir !== '—' ? (p.micro_regiao_entrega ?? undefined) : undefined}>
+                      {exibir}
+                    </span>
+                  );
+                },
+                sortValue: (p) => (p.tipo_entrega === 'entrega' ? (p.micro_regiao_entrega ?? '') : ''),
+              },
+              {
+                key: 'zona_entrega',
+                label: 'Zona',
+                sortable: true,
+                titleValue: (p) => (p.tipo_entrega === 'entrega' ? (p.zona_entrega ?? '') : ''),
+                render: (p) => {
+                  if (p.tipo_entrega !== 'entrega') return <span className="text-xs text-gray-400">—</span>;
+                  const zona = p.zona_entrega?.trim() || '—';
+                  return (
+                    <span className="block max-w-[100px] truncate text-xs" title={p.zona_entrega ?? undefined}>
+                      {zona}
+                    </span>
+                  );
+                },
+                sortValue: (p) => (p.tipo_entrega === 'entrega' ? (p.zona_entrega ?? '') : ''),
               },
               {
                 key: 'status',
                 label: 'Status',
                 render: (p) => (
                   <span
-                    className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                    className={`inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium ${
                       p.status === 'entregue'
                         ? 'bg-green-100 text-green-800'
                         : p.status === 'confirmado'
@@ -539,30 +575,37 @@ export function VendasListPage() {
                 key: 'total',
                 label: 'Total',
                 sortable: true,
-                render: (p) => <span className="font-semibold">{formatMoney(Number(p.total ?? 0))}</span>,
+                render: (p) => <span className="text-xs font-semibold">{formatMoney(Number(p.total ?? 0))}</span>,
                 sortValue: (p) => p.total ?? 0,
               },
               {
                 key: 'actions',
                 label: 'Ações',
                 render: (p) => (
-                  <div className="flex gap-1 sm:gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
                     <Button
                       variant="secondary"
                       size="sm"
                       onClick={() => navigate(`/vendas/${p.id}`)}
-                      className="min-h-[40px] min-w-[44px] touch-manipulation"
+                      title="Ver"
+                      className="min-h-[32px] min-w-[32px] p-1.5 touch-manipulation"
                     >
-                      Ver
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
                     </Button>
                     {p.status === 'rascunho' && (
                       <Button
                         variant="secondary"
                         size="sm"
                         onClick={() => handleConfirmar(p)}
-                        className="min-h-[40px] touch-manipulation"
+                        title="Confirmar"
+                        className="min-h-[32px] min-w-[32px] p-1.5 touch-manipulation"
                       >
-                        Confirmar
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
                       </Button>
                     )}
                     {p.status === 'confirmado' && p.tipo_entrega === 'entrega' && (
@@ -570,9 +613,12 @@ export function VendasListPage() {
                         variant="secondary"
                         size="sm"
                         onClick={() => handleEntregue(p)}
-                        className="min-h-[40px] touch-manipulation"
+                        title="Entregue"
+                        className="min-h-[32px] min-w-[32px] p-1.5 touch-manipulation"
                       >
-                        Entregue
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                        </svg>
                       </Button>
                     )}
                     {(p.status === 'confirmado' || p.status === 'entregue') && (
@@ -580,9 +626,12 @@ export function VendasListPage() {
                         variant="danger"
                         size="sm"
                         onClick={() => handleCancelar(p)}
-                        className="min-h-[40px] touch-manipulation"
+                        title="Cancelar"
+                        className="min-h-[32px] min-w-[32px] p-1.5 touch-manipulation"
                       >
-                        Cancelar
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
                       </Button>
                     )}
                   </div>

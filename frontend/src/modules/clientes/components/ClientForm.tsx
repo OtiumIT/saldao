@@ -2,6 +2,8 @@ import { FormEvent, useState, useEffect } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { formatDateBR } from '../../../shared/lib/format-date';
+import { useAuth } from '../../auth/hooks/useAuth';
+import * as vendasService from '../../vendas/services/vendas.service';
 import type { Cliente, CreateClienteRequest, TipoCliente } from '../types/clients.types';
 
 /** Apenas dígitos */
@@ -33,6 +35,9 @@ export function ClientForm({ cliente, onSubmit, onCancel, loading = false }: Cli
   const [observacoes, setObservacoes] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [loadingBusca, setLoadingBusca] = useState(false);
+  const [errorBusca, setErrorBusca] = useState('');
+  const { token } = useAuth();
 
   useEffect(() => {
     if (cliente) {
@@ -77,11 +82,62 @@ export function ClientForm({ cliente, onSubmit, onCancel, loading = false }: Cli
     return () => { cancelled = true; };
   }, [cepDigits]);
 
+  const handleBuscarEnderecoPorCep = async () => {
+    const d = digitsOnly(cep);
+    if (d.length !== 8) {
+      setErrorBusca('Informe o CEP com 8 dígitos.');
+      return;
+    }
+    setErrorBusca('');
+    setLoadingBusca(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${d}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setErrorBusca('CEP não encontrado.');
+        return;
+      }
+      const partes = [data.logradouro, data.bairro, data.localidade, data.uf].filter(Boolean);
+      if (partes.length) setEnderecoEntrega(partes.join(', '));
+    } catch {
+      setErrorBusca('Erro ao buscar endereço.');
+    } finally {
+      setLoadingBusca(false);
+    }
+  };
+
+  const handleBuscarCepPorEndereco = async () => {
+    const end = endereco_entrega.trim();
+    if (!end) {
+      setErrorBusca('Informe o endereço.');
+      return;
+    }
+    if (!token) {
+      setErrorBusca('Sessão expirada. Faça login novamente.');
+      return;
+    }
+    setErrorBusca('');
+    setLoadingBusca(true);
+    try {
+      const result = await vendasService.getEnriquecerEndereco(end, token);
+      setEnderecoEntrega(result.endereco_formatado);
+      if (result.cep) setCep(result.cep);
+    } catch (e) {
+      setErrorBusca(e instanceof Error ? e.message : 'Erro ao buscar CEP.');
+    } finally {
+      setLoadingBusca(false);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     if (!nome.trim()) {
       setError('Nome é obrigatório');
+      return;
+    }
+    if (endereco_entrega.trim() && digitsOnly(cep).length !== 8) {
+      setError('CEP é obrigatório quando há endereço (8 dígitos).');
       return;
     }
     setSubmitting(true);
@@ -151,23 +207,49 @@ export function ClientForm({ cliente, onSubmit, onCancel, loading = false }: Cli
       </div>
       <Input label="Telefone / WhatsApp" value={fone} onChange={(e) => setFone(e.target.value)} disabled={isLoading} />
       <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isLoading} />
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
         <Input
-          label="CEP"
+          label={endereco_entrega.trim() ? 'CEP *' : 'CEP'}
           value={cep}
-          onChange={(e) => setCep(e.target.value.replace(/\D/g, '').slice(0, 8))}
+          onChange={(e) => { setCep(e.target.value.replace(/\D/g, '').slice(0, 8)); setErrorBusca(''); }}
           placeholder="00000000"
           disabled={isLoading}
+          required={!!endereco_entrega.trim()}
         />
-        <div className="sm:col-span-2">
-          <Input
-            label="Endereço de entrega"
-            value={endereco_entrega}
-            onChange={(e) => setEnderecoEntrega(e.target.value)}
-            placeholder="Ou digite o endereço completo"
-            disabled={isLoading}
-          />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleBuscarEnderecoPorCep}
+              disabled={isLoading || loadingBusca || digitsOnly(cep).length !== 8}
+              className="mt-1"
+            >
+              {loadingBusca ? '...' : 'Buscar endereço'}
+            </Button>
+          </div>
+          <div className="sm:col-span-2">
+            <Input
+              label="Endereço de entrega"
+              value={endereco_entrega}
+              onChange={(e) => { setEnderecoEntrega(e.target.value); setErrorBusca(''); }}
+              placeholder="Ou digite o endereço completo"
+              disabled={isLoading}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleBuscarCepPorEndereco}
+              disabled={isLoading || loadingBusca || !endereco_entrega.trim()}
+              className="mt-1"
+            >
+              {loadingBusca ? '...' : 'Buscar CEP'}
+            </Button>
+          </div>
         </div>
+        {errorBusca && <p className="text-red-600 text-sm">{errorBusca}</p>}
       </div>
       <Input label="Observações" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} disabled={isLoading} />
       <div className="flex gap-2 justify-end">

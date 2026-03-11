@@ -34,6 +34,12 @@ export const roteirizacaoService = {
     }
     return repo.listEntregas(filtros);
   },
+  listPedidosParaMapa: (env: Env) => {
+    if (useSupabaseDataAPI(env)) {
+      return repoSupabase.listPedidosParaMapa(env);
+    }
+    return repo.listPedidosParaMapa();
+  },
   listPedidosPendentesEntrega: (env: Env) => {
     if (useSupabaseDataAPI(env)) {
       return repoSupabase.listPedidosPendentesEntrega(env);

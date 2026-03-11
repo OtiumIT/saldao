@@ -37,6 +37,7 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
   const [novoClienteNome, setNovoClienteNome] = useState('');
   const [data_pedido, setDataPedido] = useState('');
   const [tipo_entrega, setTipoEntrega] = useState<'retirada' | 'entrega'>('retirada');
+  const [cep, setCep] = useState('');
   const [endereco_entrega, setEnderecoEntrega] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [previsao_entrega_em_dias, setPrevisaoEntregaEmDias] = useState('');
@@ -47,6 +48,7 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
   const [itens, setItens] = useState<ItemRow[]>([{ produto_id: '', quantidade: 1, preco_unitario: 0 }]);
   const [loading, setLoading] = useState(false);
   const [extractLoading, setExtractLoading] = useState(false);
+  const [loadingEndereco, setLoadingEndereco] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,9 +71,12 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
         setClienteNome(cliente.nome ?? '');
         if (cliente.endereco_entrega?.trim()) {
           setEnderecoEntrega(cliente.endereco_entrega.trim());
+          setCep(cliente.cep?.replace(/\D/g, '').slice(0, 8) ?? '');
           try {
-            const { km } = await vendasService.getCalcularDistancia(cliente.endereco_entrega.trim(), token);
-            setDistanciaKm(String(km));
+            const r = await vendasService.getCalcularDistancia(cliente.endereco_entrega.trim(), token);
+            setDistanciaKm(String(r.km));
+            if (r.endereco_formatado) setEnderecoEntrega(r.endereco_formatado);
+            if (r.cep) setCep(r.cep);
           } catch {
             /* distância opcional; usuário pode informar manualmente */
           }
@@ -191,6 +196,10 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
         return;
       }
     }
+    if (tipo_entrega === 'entrega' && endereco_entrega.trim() && digitsOnly(cep).length !== 8) {
+      setError('CEP é obrigatório quando há endereço (8 dígitos)');
+      return;
+    }
     if (tipo_entrega === 'entrega' && !endereco_entrega.trim()) {
       setError('Informe o endereço de entrega');
       return;
@@ -217,6 +226,7 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
         data_pedido: data_pedido?.trim() || undefined,
         tipo_entrega,
         endereco_entrega: tipo_entrega === 'entrega' ? endereco_entrega.trim() : null,
+        cliente_cep: tipo_entrega === 'entrega' && cliente_id && digitsOnly(cep).length === 8 ? digitsOnly(cep) : undefined,
         observacoes: observacoes.trim() || null,
         previsao_entrega_em_dias: previsaoNum && previsaoNum >= 1 ? previsaoNum : null,
         distancia_km: tipo_entrega === 'entrega' && !Number.isNaN(kmNum) ? kmNum : null,
@@ -241,6 +251,39 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
     const byDesc = desc ? produtos.find((p) => p.descricao?.toLowerCase().includes(desc) || desc.includes(p.descricao?.toLowerCase() ?? '')) : null;
     if (byDesc) return { id: byDesc.id, preco: byDesc.preco_venda ?? precoFallback };
     return null;
+  };
+
+  const handleEnriquecerEndereco = async () => {
+    const end = endereco_entrega.trim();
+    if (!end || !token) return;
+    setLoadingEndereco(true);
+    setError('');
+    try {
+      const r = await vendasService.getEnriquecerEndereco(end, token);
+      setEnderecoEntrega(r.endereco_formatado);
+      if (r.cep) setCep(r.cep);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao enriquecer endereço');
+    } finally {
+      setLoadingEndereco(false);
+    }
+  };
+
+  const handleCalcularDistancia = async () => {
+    const end = endereco_entrega.trim();
+    if (!end || !token) return;
+    setLoadingEndereco(true);
+    setError('');
+    try {
+      const r = await vendasService.getCalcularDistancia(end, token);
+      setDistanciaKm(String(r.km));
+      if (r.endereco_formatado) setEnderecoEntrega(r.endereco_formatado);
+      if (r.cep) setCep(r.cep);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao calcular distância');
+    } finally {
+      setLoadingEndereco(false);
+    }
   };
 
   const handlePreencherPorFoto = () => {
@@ -455,11 +498,41 @@ export function RegistroVendaModal({ onSaved, onCancel }: RegistroVendaModalProp
       {tipo_entrega === 'entrega' && (
         <>
           <Input
-            label="Endereço completo de entrega *"
-            value={endereco_entrega}
-            onChange={(e) => setEnderecoEntrega(e.target.value)}
-            placeholder="Logradouro, número, bairro, cidade, CEP, referência"
+            label={endereco_entrega.trim() ? 'CEP *' : 'CEP'}
+            value={cep}
+            onChange={(e) => setCep(e.target.value.replace(/\D/g, '').slice(0, 8))}
+            placeholder="00000000"
           />
+          <div className="flex gap-2 items-end">
+            <Input
+              label="Endereço completo de entrega *"
+              value={endereco_entrega}
+              onChange={(e) => setEnderecoEntrega(e.target.value)}
+              placeholder="Logradouro, número, bairro, cidade, referência"
+              className="flex-1"
+            />
+            <div className="flex gap-1 shrink-0 pb-1">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleEnriquecerEndereco}
+                disabled={loadingEndereco || !endereco_entrega.trim()}
+                title="Preencher endereço completo e CEP via Google"
+              >
+                {loadingEndereco ? '...' : 'Enriquecer'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleCalcularDistancia}
+                disabled={loadingEndereco || !endereco_entrega.trim()}
+              >
+                {loadingEndereco ? '...' : 'Calcular km'}
+              </Button>
+            </div>
+          </div>
           <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-2">
             <p className="text-sm font-medium text-gray-800">Frete por distância</p>
             <p className="text-xs text-gray-600">Até 2 km grátis · 2 a 5 km R$ 20 · 5 a 7 km R$ 30 · 7 a 10 km R$ 40 · 10 a 13 km R$ 60 · Acima de 13 km verificar na hora</p>

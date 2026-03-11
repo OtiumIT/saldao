@@ -194,7 +194,7 @@ export function SupplierForm({ fornecedor, onSubmit, onCancel, loading = false }
           <ul className="space-y-1 max-h-40 overflow-y-auto">
             {(produtosDoFornecedor as ProdutoComSaldo[]).map((p) => (
               <li key={p.id} className="flex justify-between items-center gap-2 py-1 border-b border-gray-100 text-sm">
-                <span className="truncate">{p.codigo} – {p.descricao}</span>
+                <span className="truncate" title={`${p.codigo} – ${p.descricao}`}>{p.codigo} – {p.descricao}</span>
                 <Button
                   type="button"
                   variant="danger"
