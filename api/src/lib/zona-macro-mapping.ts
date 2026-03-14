@@ -4,14 +4,22 @@
  * o mesmo valor que zona, ou para sobrescrever com classificação logística customizada.
  *
  * Carrega também api/data/zona-macro-overrides.json (sugestões LLM ou manuais).
+ * Em Workers (import.meta.url indefinido): usa apenas mapeamento estático; overrides retornam {}.
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const OVERRIDES_PATH = join(__dirname, '../../data/zona-macro-overrides.json');
+let OVERRIDES_PATH: string | null = null;
+try {
+  const metaUrl = (import.meta as { url?: string }).url;
+  if (metaUrl && typeof metaUrl === 'string') {
+    OVERRIDES_PATH = join(dirname(fileURLToPath(metaUrl)), '../../data/zona-macro-overrides.json');
+  }
+} catch {
+  /* Workers: import.meta.url pode ser indefinido */
+}
 
 function normalize(s: string): string {
   return s
@@ -123,8 +131,9 @@ const ZONA_TO_MACRO: Record<string, string> = {
 };
 
 function loadOverrides(): Record<string, string> {
-  if (!existsSync(OVERRIDES_PATH)) return {};
+  if (!OVERRIDES_PATH) return {};
   try {
+    if (!existsSync(OVERRIDES_PATH)) return {};
     const raw = readFileSync(OVERRIDES_PATH, 'utf-8');
     const obj = JSON.parse(raw) as Record<string, string>;
     return Object.fromEntries(
@@ -147,6 +156,7 @@ function getOverrides(): Record<string, string> {
  * Atualiza o cache em memória.
  */
 export function addZonaMacroOverride(zona: string, macro: string): void {
+  if (!OVERRIDES_PATH) return;
   const key = normalize(zona);
   if (!key || !macro?.trim()) return;
   const overrides = { ...getOverrides(), [key]: macro.trim() };
