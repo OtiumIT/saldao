@@ -622,7 +622,7 @@ export function CaixaPage() {
                 maxOptions={14}
                 placeholder={loadingProdutos ? 'Carregando produtos...' : 'Digite para buscar · ↑↓ navegar · Enter selecionar'}
                 aria-label="Buscar produto por código ou descrição"
-                inputClassName="w-full h-14 px-5 text-lg bg-white border border-slate-300 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
+                inputClassName="min-h-[56px] text-lg px-4"
               />
             </div>
             <div className="flex items-center gap-2 flex-wrap">

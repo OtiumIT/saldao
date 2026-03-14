@@ -39,6 +39,19 @@ button, a, [role="button"] {
   --brand-gold: #F2C94C;
   --brand-gold-bright: #FFD700;
   --brand-gold-dark: #D4A83A;
+
+  /* Layout / sidebar (mesma identidade: accent = logo) */
+  --color-app-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-border: #E2E8F0;
+  --color-border-muted: #F1F5F9;
+  --color-text: #0F172A;
+  --color-text-muted: #64748B;
+  --color-text-subtle: #94A3B8;
+  --color-accent: #F2C94C;
+  --color-accent-hover: #D4A83A;
+  --color-accent-muted: #FEF9E7;
+  --color-accent-foreground: #121212;
 }
 
 /* Modal Animations */

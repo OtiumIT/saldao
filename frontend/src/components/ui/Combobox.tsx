@@ -42,6 +42,9 @@ export function Combobox({
   inputClassName = '',
   'aria-label': ariaLabel = 'Buscar e selecionar',
 }: ComboboxProps) {
+  const defaultInputClass =
+    'w-full min-h-[44px] px-4 py-4 text-base border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-4 focus:ring-brand-gold/10 focus:border-brand-gold touch-manipulation transition-all duration-300';
+  const resolvedInputClass = inputClassName ? `${defaultInputClass} ${inputClassName}` : defaultInputClass;
   const [open, setOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -138,17 +141,17 @@ export function Combobox({
         aria-activedescendant={visible[highlightIndex] ? `combobox-option-${visible[highlightIndex].value}` : undefined}
         aria-label={ariaLabel}
         id="combobox-input"
-        className={inputClassName}
+        className={resolvedInputClass}
       />
       {open && (
         <ul
           ref={listRef}
           id="combobox-list"
           role="listbox"
-          className="absolute z-50 top-full left-0 right-0 mt-1 max-h-72 overflow-y-auto bg-[#1a1a1a] border border-white/20 rounded-xl shadow-xl py-1"
+          className="absolute z-50 top-full left-0 right-0 mt-1 max-h-72 overflow-y-auto bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-xl py-1"
         >
           {visible.length === 0 ? (
-            <li className="px-4 py-3 text-white/50 text-sm" role="option">
+            <li className="px-4 py-3 text-[var(--color-text-muted)] text-sm" role="option">
               Nenhum resultado
             </li>
           ) : (
@@ -158,8 +161,10 @@ export function Combobox({
                 id={`combobox-option-${opt.value}`}
                 role="option"
                 aria-selected={i === highlightIndex}
-                className={`px-4 py-3 cursor-pointer border-b border-white/5 last:border-0 ${
-                  i === highlightIndex ? 'bg-amber-500/30 text-white' : 'text-white hover:bg-white/10'
+                className={`px-4 py-3 cursor-pointer border-b border-[var(--color-border-muted)] last:border-0 ${
+                  i === highlightIndex
+                    ? 'bg-[var(--color-accent-muted)] text-[var(--color-accent-foreground)]'
+                    : 'text-[var(--color-text)] hover:bg-[var(--color-border-muted)]'
                 } ${opt.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                 onMouseEnter={() => setHighlightIndex(i)}
                 onMouseDown={(e) => {
