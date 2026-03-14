@@ -1,20 +1,25 @@
 /**
  * Preenche zona_entrega nos pedidos a partir de lat/lon (reverse geocode).
  * Zona = bairro/região para facilitar agrupar entregas ao selecionar para o caminhão.
+ * Quando o mapeamento não encontra a macro, usa OpenAI para classificar.
  *
  * Uso: cd api && npx tsx scripts/popular-zonas-entrega.ts [--dry-run]
  * Requer: DATABASE_URL e GOOGLE_MAPS_API_KEY no .env
+ * Opcional: OPENAI_API_KEY para classificar zonas sem mapeamento (salva em overrides)
  */
 import 'dotenv/config';
 import { Pool } from 'pg';
 import { reverseGeocodeToBairroEMicroRegiao } from '../src/lib/google-maps.js';
-import { zonaToMacroRegiao } from '../src/lib/zona-macro-mapping.js';
+import { zonaToMacroRegiao, addZonaMacroOverride } from '../src/lib/zona-macro-mapping.js';
+import { sugerirMacroPorBairro } from '../src/lib/llm-zona-macro.js';
 
 const DELAY_MS = 350;
+const LLM_DELAY_MS = 500;
 
 async function main() {
   const connStr = process.env.DATABASE_URL;
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY?.trim() ?? null;
   const dryRun = process.argv.includes('--dry-run');
 
   if (!connStr) {
@@ -69,14 +74,31 @@ async function main() {
       await new Promise((r) => setTimeout(r, DELAY_MS));
 
       const zona = bairro ?? 'Sem zona';
-      // Preferir mapeamento customizado (zona → macro) quando disponível
-      const micro = (bairro && zonaToMacroRegiao(bairro)) ?? microRegiao ?? '—';
-      console.log(`  ${row.endereco_entrega.slice(0, 45)}... → ${zona} | ${micro}`);
+      // Preferir mapeamento customizado; se não achar, tentar OpenAI; senão microRegiao da API
+      let micro = (bairro && zonaToMacroRegiao(bairro)) ?? microRegiao ?? '—';
+      if (micro === '—' && bairro && openaiKey) {
+        try {
+          const macroLlm = await sugerirMacroPorBairro(bairro, openaiKey);
+          await new Promise((r) => setTimeout(r, LLM_DELAY_MS));
+          if (macroLlm) {
+            micro = macroLlm;
+            if (!dryRun) addZonaMacroOverride(bairro, macroLlm);
+            console.log(`  ${row.endereco_entrega.slice(0, 45)}... → ${zona} | ${micro} (OpenAI)`);
+          } else {
+            console.log(`  ${row.endereco_entrega.slice(0, 45)}... → ${zona} | ${micro}`);
+          }
+        } catch (e) {
+          console.log(`  ${row.endereco_entrega.slice(0, 45)}... → ${zona} | — (OpenAI falhou)`);
+        }
+      } else {
+        console.log(`  ${row.endereco_entrega.slice(0, 45)}... → ${zona} | ${micro}`);
+      }
 
-      if (!dryRun && (bairro || microRegiao)) {
+      const microToSave = micro !== '—' ? micro : (microRegiao ?? row.micro_regiao_entrega);
+      if (!dryRun && (bairro || microToSave)) {
         await pool.query(
           `UPDATE pedidos_venda SET zona_entrega = COALESCE($1, zona_entrega), micro_regiao_entrega = COALESCE($2, micro_regiao_entrega), updated_at = NOW() WHERE id = $3`,
-          [bairro ?? row.zona_entrega, microRegiao ?? row.micro_regiao_entrega, row.id]
+          [bairro ?? row.zona_entrega, microToSave, row.id]
         );
         atualizados++;
       }

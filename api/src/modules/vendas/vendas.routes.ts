@@ -6,7 +6,7 @@ import { getEnv } from '../../config/env.worker.js';
 import { extractSaleOrderFromImage } from '../../lib/openai-helper.js';
 import { vendasService } from './vendas.service.js';
 import { clientesService } from '../clientes/clientes.service.js';
-import { runGeocodeJob } from '../geocode/geocode-job.js';
+import { scheduleGeocodeInBackground } from '../geocode/geocode-job.js';
 
 type Ctx = { Bindings: Env };
 
@@ -225,7 +225,7 @@ export const vendasRoutes = new Hono<Ctx>()
       const { cliente_cep, ...createPayload } = parsed.data;
       const created = await vendasService.create(c.env, createPayload);
       if (parsed.data.tipo_entrega === 'entrega' && parsed.data.endereco_entrega?.trim()) {
-        (c.executionCtx as { waitUntil?: (p: Promise<unknown>) => void } | undefined)?.waitUntil?.(runGeocodeJob(c.env));
+        scheduleGeocodeInBackground(c.env, c.executionCtx as { waitUntil?: (p: Promise<unknown>) => void } | undefined);
       }
       if (parsed.data.cliente_id && (cliente_cep != null || parsed.data.endereco_entrega?.trim())) {
         const updateData: { cep?: string | null; endereco_entrega?: string | null } = {};
@@ -253,7 +253,7 @@ export const vendasRoutes = new Hono<Ctx>()
       const updated = await vendasService.update(c.env, id, parsed.data);
       if (!updated) return c.json({ error: 'Pedido não encontrado ou não é rascunho' }, 404);
       if (updated.tipo_entrega === 'entrega' && updated.endereco_entrega?.trim()) {
-        (c.executionCtx as { waitUntil?: (p: Promise<unknown>) => void } | undefined)?.waitUntil?.(runGeocodeJob(c.env));
+        scheduleGeocodeInBackground(c.env, c.executionCtx as { waitUntil?: (p: Promise<unknown>) => void } | undefined);
       }
       return c.json(updated);
     } catch (e) {

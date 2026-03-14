@@ -34,6 +34,7 @@ const ZONA_TO_MACRO: Record<string, string> = {
   'vila carrao': 'ZL 1',
   'vila dalila': 'ZL 1',
   'vila formosa': 'ZL 1',
+  'jardim vila formosa': 'ZL 1',
   'vila matilde': 'ZL 1',
   'vila prudente': 'ZL 1',
   'jardim vila carrao': 'ZL 1',

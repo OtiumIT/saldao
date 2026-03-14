@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../types/worker-env.js';
 import { requireAuth } from '../../lib/auth-helper.worker.js';
+import { getEnv } from '../../config/env.worker.js';
 import { geocodeBatch } from './geocode.service.js';
 
 type Ctx = { Bindings: Env };
@@ -21,7 +22,8 @@ export const geocodeRoutes = new Hono<Ctx>().post('/', async (c) => {
   }
 
   try {
-    const results = await geocodeBatch(parsed.data.addresses);
+    const googleApiKey = getEnv(c.env).googleMaps?.apiKey ?? null;
+    const results = await geocodeBatch(parsed.data.addresses, googleApiKey);
     return c.json({ results });
   } catch (e) {
     return c.json(

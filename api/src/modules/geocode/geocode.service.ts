@@ -1,8 +1,7 @@
 /**
  * Geocoding via Nominatim (OpenStreetMap) - gratuito, sem API key.
- * Respeita limite de 1 req/segundo (Usage Policy).
- * Todas as vendas são na Grande São Paulo: sem cidade no endereço usa São Paulo;
- * resultados fora da região (ex.: Rio) são descartados.
+ * Fallback para Google Maps quando Nominatim falha (mais preciso para SP).
+ * Respeita limite de 1 req/segundo (Usage Policy) no Nominatim.
  */
 export interface GeocodeResult {
   lat: number;
@@ -76,15 +75,32 @@ export async function geocodeOne(address: string): Promise<GeocodeResult | null>
   }
 }
 
+/**
+ * Geocodifica um endereço: tenta Nominatim, se falhar usa Google (quando apiKey disponível).
+ */
+export async function geocodeOneWithFallback(
+  address: string,
+  googleApiKey?: string | null
+): Promise<GeocodeResult | null> {
+  let r = await geocodeOne(address);
+  if (!r && googleApiKey?.trim()) {
+    const { geocodeAddressToLatLon } = await import('../../lib/google-maps.js');
+    const geo = await geocodeAddressToLatLon(googleApiKey, address);
+    if (geo) r = { lat: geo.lat, lon: geo.lon };
+  }
+  return r;
+}
+
 /** Geocodifica vários endereços com delay de 1.1s entre cada (limite Nominatim). */
 export async function geocodeBatch(
-  addresses: string[]
+  addresses: string[],
+  googleApiKey?: string | null
 ): Promise<Record<string, { lat: number; lon: number; display_name?: string }>> {
   const results: Record<string, { lat: number; lon: number; display_name?: string }> = {};
   const unique = [...new Set(addresses.filter((a) => a?.trim()))];
   for (let i = 0; i < unique.length; i++) {
     const addr = unique[i]!;
-    const r = await geocodeOne(addr);
+    const r = await geocodeOneWithFallback(addr, googleApiKey);
     if (r) results[addr] = { lat: r.lat, lon: r.lon, display_name: r.display_name };
     if (i < unique.length - 1) {
       await new Promise((resolve) => setTimeout(resolve, 1100));
